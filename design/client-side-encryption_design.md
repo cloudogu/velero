@@ -21,7 +21,10 @@ It is therefore desired to have the ability to store this data in an encrypted m
 
 
 ## High-Level Design
-One to two paragraphs that describe the high level changes that will be made to implement this proposal.
+The encryption will happen during the backup process before the objects are persisted (e.g. written to an object store).
+Decryption will happen during a restore after the persisted objects have been read.
+The encryption key will be stored in a Kubernetes secret.
+Encryption can be activated in the Velero configuration.
 
 ## Detailed Design
 A detailed design describing how the changes to the product should be made.
@@ -32,13 +35,21 @@ The same applies to changes in CRDs, YAML examples, and so on.
 Ideally the changes should be made in sequence so that the work required to implement this design can be done incrementally, possibly in parallel.
 
 ## Alternatives Considered
-If there are alternative high level or detailed designs that were not pursued they should be called out here with a brief explanation of why they were not pursued.
+This could also be implemented in object store plugins.
+Then however, it has to be implemented in every single object store plugin.
+This is not viable.
+
+We could just make use of server-side encryption of an object store.
+But what about object stores that do not support this?
+Also, client-side encryption is a lot safer, since the backups are encrypted during transit as well.
 
 ## Security Considerations
-If this proposal has an impact to the security of the product, its users, or data stored or transmitted via the product, they must be addressed here.
+Overall this feature should increase the security of the product.
+However, the security of this feature has to be ensured to avoid giving users a false sense of security. 
 
 ## Compatibility
-A discussion of any compatibility issues that need to be considered
+What happens if encryption is activated when unencrypted backups already exist?
+What about the reverse?
 
 ## Implementation
 A description of the implementation, timelines, and any resources that have agreed to contribute.
