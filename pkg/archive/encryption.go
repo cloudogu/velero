@@ -17,18 +17,77 @@ limitations under the License.
 package archive
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"io"
 )
 
-func NewEncryptionWriter(out io.Writer) io.Writer {
+// TODO overall better error messages
 
+// TODO get key from secret
+const encryptionKey = "aler,amz3daps.f9hgandkal4dsxk3d0"
+
+func NewDecryptionReader(in io.Reader) (io.Reader, error) {
+	// TODO create encryptor according to configuration
+	encryptor, err := newAesEncryptor(encryptionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, in)
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := buf.Bytes()
+	plaintext, err := encryptor.decrypt(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.NewReader(plaintext), nil
 }
 
-func NewDecryptionReader(in io.Reader) io.Reader {
+func NewEncryptionWriter(out io.Writer) (io.WriteCloser, error) {
+	// TODO create encryptor according to configuration
+	encryptor, err := newAesEncryptor(encryptionKey)
+	if err != nil {
+		return nil, err
+	}
 
+	return &encryptionWriter{
+		encryptor: encryptor,
+		plaintext: make([]byte, 0),
+		out:       out,
+	}, nil
+}
+
+type encryptionWriter struct {
+	encryptor encryptor
+	plaintext []byte
+	out       io.Writer
+}
+
+func (ew *encryptionWriter) Write(p []byte) (n int, err error) {
+	ew.plaintext = append(ew.plaintext, p...)
+	return len(p), nil
+}
+
+func (ew *encryptionWriter) Close() error {
+	ciphertext, err := ew.encryptor.encrypt(ew.plaintext)
+	if err != nil {
+		return err
+	}
+
+	_, err = ew.out.Write(ciphertext)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type encryptor interface {

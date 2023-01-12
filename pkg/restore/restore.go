@@ -410,8 +410,13 @@ func (ctx *restoreContext) execute() (Result, Result) {
 
 	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
 
-	// TODO: decrypt from backupReader
-	decryptor := archive.NewDecryptionReader(ctx.backupReader)
+	decryptor, err := archive.NewDecryptionReader(ctx.backupReader)
+	if err != nil {
+		ctx.log.Infof("error decrypting backup: %v", err)
+		errs.AddVeleroError(err)
+		return warnings, errs
+	}
+
 	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(decryptor)
 	if err != nil {
 		ctx.log.Infof("error unzipping and extracting: %v", err)

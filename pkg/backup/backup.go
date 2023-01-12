@@ -187,9 +187,24 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	backupFile io.Writer,
 	backupItemActionResolver framework.BackupItemActionResolver,
 	itemSnapshotterResolver framework.ItemSnapshotterResolver,
-	volumeSnapshotterGetter VolumeSnapshotterGetter) error {
-	// TODO: encrypt from backupFile
-	encryptor := archive.NewEncryptionWriter(backupFile)
+	volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
+
+	var err error
+	encryptor, err := archive.NewEncryptionWriter(backupFile)
+	if err != nil {
+		log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
+		return err
+	}
+
+	defer func() {
+		err = encryptor.Close()
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from encryptor.Close")
+		}
+		// FIXME: is this really a good idea?
+		backupErr = err
+	}()
+
 	gzippedData := gzip.NewWriter(encryptor)
 	defer gzippedData.Close()
 
@@ -210,7 +225,6 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	log.Infof("Excluding resources: %s", backupRequest.ResourceIncludesExcludes.ExcludesString())
 	log.Infof("Backing up all volumes using pod volume backup: %t", boolptr.IsSetToTrue(backupRequest.Backup.Spec.DefaultVolumesToFsBackup))
 
-	var err error
 	backupRequest.ResourceHooks, err = getResourceHooks(backupRequest.Spec.Hooks.Resources, kb.discoveryHelper)
 	if err != nil {
 		log.WithError(errors.WithStack(err)).Debugf("Error from getResourceHooks")
