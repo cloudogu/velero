@@ -1,5 +1,5 @@
 /*
-Copyright the Velero Contributors.
+Copyright 2023 the Velero Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vmware-tanzu/velero/pkg/archive"
 	"io"
 	"io/ioutil"
 	"os"
@@ -187,7 +188,9 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	backupItemActionResolver framework.BackupItemActionResolver,
 	itemSnapshotterResolver framework.ItemSnapshotterResolver,
 	volumeSnapshotterGetter VolumeSnapshotterGetter) error {
-	gzippedData := gzip.NewWriter(backupFile)
+	// TODO: encrypt from backupFile
+	encryptor := archive.NewEncryptionWriter(backupFile)
+	gzippedData := gzip.NewWriter(encryptor)
 	defer gzippedData.Close()
 
 	tw := tar.NewWriter(gzippedData)

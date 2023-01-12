@@ -1,5 +1,5 @@
 /*
-Copyright The Velero Contributors.
+Copyright 2023 The Velero Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -410,7 +410,9 @@ func (ctx *restoreContext) execute() (Result, Result) {
 
 	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
 
-	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(ctx.backupReader)
+	// TODO: decrypt from backupReader
+	decryptor := archive.NewDecryptionReader(ctx.backupReader)
+	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(decryptor)
 	if err != nil {
 		ctx.log.Infof("error unzipping and extracting: %v", err)
 		errs.AddVeleroError(err)
