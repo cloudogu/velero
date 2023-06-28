@@ -27,6 +27,7 @@ The encryption key will be stored in a Kubernetes secret.
 Encryption can be activated in the Velero configuration.
 
 ## Detailed Design
+TODO
 A detailed design describing how the changes to the product should be made.
 
 The names of types, fields, interfaces, and methods should be agreed on here, not debated in code review.
@@ -52,7 +53,9 @@ What happens if encryption is activated when unencrypted backups already exist?
 What about the reverse?
 
 ## Implementation
+TODO
 A description of the implementation, timelines, and any resources that have agreed to contribute.
 
 ## Open Issues
+TODO
 A discussion of issues relating to this proposal for which the author does not know the solution. This section may be omitted if there are none.
