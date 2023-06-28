@@ -189,6 +189,9 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	itemSnapshotterResolver framework.ItemSnapshotterResolver,
 	volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
 
+	// Finding: Only the primary backup archive is encrypted here.
+	//			Other archives like logs are still unencrypted.
+
 	var err error
 	encryptor, err := archive.NewEncryptionWriter(backupFile)
 	if err != nil {
@@ -201,7 +204,6 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 		if err != nil {
 			log.WithError(errors.WithStack(err)).Debugf("Error from encryptor.Close")
 		}
-		// FIXME: is this really a good idea?
 		backupErr = err
 	}()
 
