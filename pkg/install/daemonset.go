@@ -40,7 +40,6 @@ func DaemonSet(namespace string, opts ...podTemplateOption) *appsv1.DaemonSet {
 	imageParts := strings.Split(c.image, ":")
 	if len(imageParts) == 2 && imageParts[1] != "latest" {
 		pullPolicy = corev1.PullIfNotPresent
-
 	}
 
 	daemonSetArgs := []string{
@@ -74,7 +73,7 @@ func DaemonSet(namespace string, opts ...podTemplateOption) *appsv1.DaemonSet {
 					Annotations: c.annotations,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "velero",
+					ServiceAccountName: c.serviceAccountName,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsUser: &userID,
 					},

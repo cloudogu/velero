@@ -69,13 +69,39 @@ spec:
     # PersistentVolumeClaim is included in the backup, its associated PersistentVolume (which is
     # cluster-scoped) would also be backed up.
     includeClusterResources: null
+    # Array of cluster-scoped resources to exclude from the backup. Resources may be shortcuts 
+    # (for example 'sc' for 'storageclasses'), or fully-qualified. If unspecified, 
+    # no additional cluster-scoped resources are excluded. Optional.
+    # Cannot work with include-resources, exclude-resources and include-cluster-resources.
+    excludedClusterScopedResources: {}
+    # Array of cluster-scoped resources to include from the backup. Resources may be shortcuts 
+    # (for example 'sc' for 'storageclasses'), or fully-qualified. If unspecified, 
+    # no additional cluster-scoped resources are included. Optional.
+    # Cannot work with include-resources, exclude-resources and include-cluster-resources.
+    includedClusterScopedResources: {}
+    # Array of namespace-scoped resources to exclude from the backup. Resources may be shortcuts 
+    # (for example 'cm' for 'configmaps'), or fully-qualified. If unspecified, 
+    # no namespace-scoped resources are excluded. Optional.
+    # Cannot work with include-resources, exclude-resources and include-cluster-resources.
+    excludedNamespaceScopedResources: {}
+    # Array of namespace-scoped resources to include from the backup. Resources may be shortcuts 
+    # (for example 'cm' for 'configmaps'), or fully-qualified. If unspecified, 
+    # all namespace-scoped resources are included. Optional.
+    # Cannot work with include-resources, exclude-resources and include-cluster-resources.
+    includedNamespaceScopedResources: {}
     # Individual objects must match this label selector to be included in the scheduled backup. Optional.
     labelSelector:
       matchLabels:
         app: velero
         component: server
-    # Whether to snapshot volumes. This only applies to PersistentVolumes for Azure, GCE, and
-    # AWS. Valid values are true, false, and null/unset. If unset, Velero performs snapshots as long as
+    # Individual object when matched with any of the label selector specified in the set are to be included in the backup. Optional.
+    # orLabelSelectors as well as labelSelector cannot co-exist, only one of them can be specified in the backup request
+    orLabelSelectors:
+      - matchLabels:
+          app: velero
+      - matchLabels:
+          app: data-protection
+    # Whether to snapshot volumes. Valid values are true, false, and null/unset. If unset, Velero performs snapshots as long as
     # a persistent volume provider is configured for Velero.
     snapshotVolumes: null
     # Where to store the tarball and logs.

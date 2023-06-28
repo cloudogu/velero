@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/clock"
+	clocks "k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	bld "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +36,6 @@ import (
 	"github.com/vmware-tanzu/velero/pkg/builder"
 	"github.com/vmware-tanzu/velero/pkg/metrics"
 	"github.com/vmware-tanzu/velero/pkg/util/kube"
-	kubeutil "github.com/vmware-tanzu/velero/pkg/util/kube"
 )
 
 const (
@@ -47,7 +46,7 @@ type scheduleReconciler struct {
 	client.Client
 	namespace string
 	logger    logrus.FieldLogger
-	clock     clock.Clock
+	clock     clocks.WithTickerAndDelayedExecution
 	metrics   *metrics.ServerMetrics
 }
 
@@ -61,7 +60,7 @@ func NewScheduleReconciler(
 		Client:    client,
 		namespace: namespace,
 		logger:    logger,
-		clock:     clock.RealClock{},
+		clock:     clocks.RealClock{},
 		metrics:   metrics,
 	}
 }
@@ -151,7 +150,7 @@ func parseCronSchedule(itm *velerov1.Schedule, logger logrus.FieldLogger) (cron.
 		return nil, validationErrors
 	}
 
-	log := logger.WithField("schedule", kubeutil.NamespaceAndName(itm))
+	log := logger.WithField("schedule", kube.NamespaceAndName(itm))
 
 	// adding a recover() around cron.Parse because it panics on empty string and is possible
 	// that it panics under other scenarios as well.
@@ -183,7 +182,7 @@ func parseCronSchedule(itm *velerov1.Schedule, logger logrus.FieldLogger) (cron.
 
 // checkIfBackupInNewOrProgress check whether there are backups created by this schedule still in New or InProgress state
 func (c *scheduleReconciler) checkIfBackupInNewOrProgress(schedule *velerov1.Schedule) bool {
-	log := c.logger.WithField("schedule", kubeutil.NamespaceAndName(schedule))
+	log := c.logger.WithField("schedule", kube.NamespaceAndName(schedule))
 	backupList := &velerov1.BackupList{}
 	options := &client.ListOptions{
 		Namespace: schedule.Namespace,
@@ -211,7 +210,7 @@ func (c *scheduleReconciler) checkIfBackupInNewOrProgress(schedule *velerov1.Sch
 // ifDue check whether schedule is due to create a new backup.
 func (c *scheduleReconciler) ifDue(schedule *velerov1.Schedule, cronSchedule cron.Schedule) bool {
 	isDue, nextRunTime := getNextRunTime(schedule, cronSchedule, c.clock.Now())
-	log := c.logger.WithField("schedule", kubeutil.NamespaceAndName(schedule))
+	log := c.logger.WithField("schedule", kube.NamespaceAndName(schedule))
 
 	if !isDue {
 		log.WithField("nextRunTime", nextRunTime).Debug("Schedule is not due, skipping")
@@ -258,10 +257,8 @@ func getNextRunTime(schedule *velerov1.Schedule, cronSchedule cron.Schedule, asO
 
 func getBackup(item *velerov1.Schedule, timestamp time.Time) *velerov1.Backup {
 	name := item.TimestampedName(timestamp)
-	backup := builder.
+	return builder.
 		ForBackup(item.Namespace, name).
 		FromSchedule(item).
 		Result()
-
-	return backup
 }

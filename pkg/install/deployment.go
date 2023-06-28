@@ -44,6 +44,7 @@ type podTemplateConfig struct {
 	plugins                         []string
 	features                        []string
 	defaultVolumesToFsBackup        bool
+	serviceAccountName              string
 	uploaderType                    string
 }
 
@@ -135,6 +136,12 @@ func WithDefaultVolumesToFsBackup() podTemplateOption {
 	}
 }
 
+func WithServiceAccountName(sa string) podTemplateOption {
+	return func(c *podTemplateConfig) {
+		c.serviceAccountName = sa
+	}
+}
+
 func Deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment {
 	// TODO: Add support for server args
 	c := &podTemplateConfig{
@@ -149,7 +156,6 @@ func Deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 	imageParts := strings.Split(c.image, ":")
 	if len(imageParts) == 2 && imageParts[1] != "latest" {
 		pullPolicy = corev1.PullIfNotPresent
-
 	}
 
 	args := []string{"server"}
@@ -163,6 +169,18 @@ func Deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 
 	if len(c.uploaderType) > 0 {
 		args = append(args, fmt.Sprintf("--uploader-type=%s", c.uploaderType))
+	}
+
+	if c.restoreOnly {
+		args = append(args, "--restore-only")
+	}
+
+	if c.defaultRepoMaintenanceFrequency > 0 {
+		args = append(args, fmt.Sprintf("--default-repo-maintain-frequency=%v", c.defaultRepoMaintenanceFrequency))
+	}
+
+	if c.garbageCollectionFrequency > 0 {
+		args = append(args, fmt.Sprintf("--garbage-collection-frequency=%v", c.garbageCollectionFrequency))
 	}
 
 	deployment := &appsv1.Deployment{
@@ -180,7 +198,7 @@ func Deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyAlways,
-					ServiceAccountName: "velero",
+					ServiceAccountName: c.serviceAccountName,
 					Containers: []corev1.Container{
 						{
 							Name:            "velero",
@@ -284,24 +302,11 @@ func Deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 
 	deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, c.envVars...)
 
-	if c.restoreOnly {
-		deployment.Spec.Template.Spec.Containers[0].Args = append(deployment.Spec.Template.Spec.Containers[0].Args, "--restore-only")
-	}
-
-	if c.defaultRepoMaintenanceFrequency > 0 {
-		deployment.Spec.Template.Spec.Containers[0].Args = append(deployment.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("--default-repo-maintain-frequency=%v", c.defaultRepoMaintenanceFrequency))
-	}
-
-	if c.garbageCollectionFrequency > 0 {
-		deployment.Spec.Template.Spec.Containers[0].Args = append(deployment.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("--garbage-collection-frequency=%v", c.garbageCollectionFrequency))
-	}
-
 	if len(c.plugins) > 0 {
 		for _, image := range c.plugins {
 			container := *builder.ForPluginContainer(image, pullPolicy).Result()
 			deployment.Spec.Template.Spec.InitContainers = append(deployment.Spec.Template.Spec.InitContainers, container)
 		}
-
 	}
 
 	return deployment

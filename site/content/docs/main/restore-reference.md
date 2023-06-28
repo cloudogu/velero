@@ -169,6 +169,49 @@ data:
   # class name.
   <old-storage-class>: <new-storage-class>
 ```
+### Changing Pod/Deployment/StatefulSet/DaemonSet/ReplicaSet/ReplicationController/Job/CronJob Image Repositories  
+Velero can change the image name of pod/deployment/statefulsets/daemonset/replicaset/replicationcontroller/job/cronjob during restores. To configure a image name mapping, create a config map in the Velero namespace like the following:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # any name can be used; Velero uses the labels (below)
+  # to identify it rather than the name
+  name: change-image-name-config
+  # must be in the velero namespace
+  namespace: velero
+  # the below labels should be used verbatim in your
+  # ConfigMap.
+  labels:
+    # this value-less label identifies the ConfigMap as
+    # config for a plugin (i.e. the built-in restore item action plugin)
+    velero.io/plugin-config: ""
+    # this label identifies the name and kind of plugin
+    # that this ConfigMap is for.
+    velero.io/change-image-name: RestoreItemAction
+data:
+  # add 1+ key-value pairs here, where the key can be any
+  # words that ConfigMap accepts. 
+  # the value should be：
+  # "<old_image_name_sub_part><delimiter><new_image_name_sub_part>"
+  # for current implementation the <delimiter> can only be ","
+  # e.x: in case your old image name is 1.1.1.1:5000/abc:test
+  "case1":"1.1.1.1:5000,2.2.2.2:3000"
+  "case2":"5000,3000"
+  "case3":"abc:test,edf:test"
+  "case5":"test,latest"
+  "case4":"1.1.1.1:5000/abc:test,2.2.2.2:3000/edf:test"
+  # Please note that image name may contain more than one part that
+  # matching the replacing words.
+  # e.x:in case your old image names are:
+  # dev/image1:dev and dev/image2:dev
+  # you want change to:
+  # test/image1:dev and test/image2:dev
+  # the suggested replacing rule is:
+  "case5":"dev/,test/"
+  # this will avoid unexpected replacement to the second "dev".
+```
 
 ### Changing PVC selected-node
 
@@ -212,17 +255,21 @@ For example, A Persistent Volume object has a reference to the Persistent Volume
 
 ## Restore existing resource policy
 
-By default, Velero is configured to be non-destructive during a restore. This means that it will never overwrite data that already exists in your cluster. When Velero attempts to create a resource during a restore, the resource being restored is compared to the existing resources on the target cluster by the Kubernetes API Server. If the resource already exists in the target cluster, Velero skips restoring the current resource and moves onto the next resource to restore, without making any changes to the target cluster.
+By default, Velero is configured to be non-destructive during a restore. This means that it will never overwrite data that already exists in your cluster. When Velero attempts to create a resource during a restore, the resource being restored is compared to the existing resources on the target cluster. If the resource already exists in the target cluster, Velero skips restoring the current resource and moves onto the next resource to restore, without making any changes to the target cluster.
 
 An exception to the default restore policy is ServiceAccounts. When restoring a ServiceAccount that already exists on the target cluster, Velero will attempt to merge the fields of the ServiceAccount from the backup into the existing ServiceAccount. Secrets and ImagePullSecrets are appended from the backed-up ServiceAccount. Velero adds any non-existing labels and annotations from the backed-up ServiceAccount to the existing resource, leaving the existing labels and annotations in place.
 
-You can change this policy for a restore by using the `--existing-resource-policy` restore flag. The available options are `none` (default) and `update`. If you choose to `update` existing resources during a restore (`--existing-resource-policy=update`), Velero will attempt to update an existing resource to match the resource being restored:
+You can change this policy for a restore by using the `--existing-resource-policy` restore flag. The available options
+are `none` (default) and `update`. If you choose to update existing resources during a restore
+(`--existing-resource-policy=update`), Velero will attempt to update an existing resource to match the resource from the backup: 
 
 * If the existing resource in the target cluster is the same as the resource Velero is attempting to restore, Velero will add a `velero.io/backup-name` label with the backup name and a `velero.io/restore-name` label with the restore name to the existing resource. If patching the labels fails, Velero adds a restore error and continues restoring the next resource.
 
 * If the existing resource in the target cluster is different from the backup, Velero will first try to patch the existing resource to match the backup resource. If the patch is successful, Velero will add a `velero.io/backup-name` label with the backup name and a `velero.io/restore-name` label with the restore name to the existing resource. If the patch fails, Velero adds a restore warning and tries to add the `velero.io/backup-name` and `velero.io/restore-name` labels on the resource. If the labels patch also fails, then Velero logs a restore error and continues restoring the next resource.
 
 You can also configure the existing resource policy in a [Restore](api-types/restore.md) object.
+
+**NOTE:** Update of a resource only applies to the Kubernetes resource data such as its spec. It may not work as expected for certain resource types such as PVCs and Pods. In case of PVCs for example, data in the PV is not restored or overwritten in any way. 
 
 ## Removing a Restore object
 

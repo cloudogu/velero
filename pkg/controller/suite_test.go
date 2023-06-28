@@ -36,6 +36,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	velerov1api "github.com/vmware-tanzu/velero/pkg/apis/velero/v1"
+	velerov2alpha1api "github.com/vmware-tanzu/velero/pkg/apis/velero/v2alpha1"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -87,7 +88,6 @@ type testEnvironment struct {
 	Config *rest.Config
 
 	doneMgr context.Context
-	cancel  context.CancelFunc
 }
 
 // newTestEnvironment creates a new environment spinning up a local api-server.
@@ -97,6 +97,9 @@ type testEnvironment struct {
 func newTestEnvironment() *testEnvironment {
 	// scheme.Scheme is initialized with all native Kubernetes types
 	err := velerov1api.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = velerov2alpha1api.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	env = &envtest.Environment{

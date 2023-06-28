@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/kopia/kopia/repo"
+	"github.com/kopia/kopia/repo/manifest"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -262,14 +263,14 @@ func TestMaintain(t *testing.T) {
 func TestWriteInitParameters(t *testing.T) {
 	var directRpo *repomocks.DirectRepository
 	testCases := []struct {
-		name               string
-		repoOptions        udmrepo.RepoOptions
-		returnRepo         *repomocks.DirectRepository
-		returnRepoWriter   *repomocks.DirectRepositoryWriter
-		repoOpen           func(context.Context, string, string, *repo.Options) (repo.Repository, error)
-		newRepoWriterError error
-		findManifestError  error
-		expectedErr        string
+		name                 string
+		repoOptions          udmrepo.RepoOptions
+		returnRepo           *repomocks.DirectRepository
+		returnRepoWriter     *repomocks.DirectRepositoryWriter
+		repoOpen             func(context.Context, string, string, *repo.Options) (repo.Repository, error)
+		newRepoWriterError   error
+		replaceManifestError error
+		expectedErr          string
 	}{
 		{
 			name: "repo open fail, repo not exist",
@@ -315,10 +316,10 @@ func TestWriteInitParameters(t *testing.T) {
 			repoOpen: func(context.Context, string, string, *repo.Options) (repo.Repository, error) {
 				return directRpo, nil
 			},
-			returnRepo:        new(repomocks.DirectRepository),
-			returnRepoWriter:  new(repomocks.DirectRepositoryWriter),
-			findManifestError: errors.New("fake-find-manifest-error"),
-			expectedErr:       "error to init write repo parameters: error to set maintenance params: error looking for maintenance manifest: fake-find-manifest-error",
+			returnRepo:           new(repomocks.DirectRepository),
+			returnRepoWriter:     new(repomocks.DirectRepositoryWriter),
+			replaceManifestError: errors.New("fake-replace-manifest-error"),
+			expectedErr:          "error to init write repo parameters: error to set maintenance params: put manifest: fake-replace-manifest-error",
 		},
 	}
 
@@ -343,7 +344,7 @@ func TestWriteInitParameters(t *testing.T) {
 
 			if tc.returnRepoWriter != nil {
 				tc.returnRepoWriter.On("Close", mock.Anything).Return(nil)
-				tc.returnRepoWriter.On("FindManifests", mock.Anything, mock.Anything).Return(nil, tc.findManifestError)
+				tc.returnRepoWriter.On("ReplaceManifests", mock.Anything, mock.Anything, mock.Anything).Return(manifest.ID(""), tc.replaceManifestError)
 			}
 
 			err := writeInitParameters(ctx, tc.repoOptions, logger)
@@ -400,6 +401,314 @@ func TestShouldLog(t *testing.T) {
 				require.GreaterOrEqual(t, lt.lastTime-nw.UnixNano(), lt.interval)
 			} else {
 				require.Equal(t, lt.lastTime, before)
+			}
+		})
+	}
+}
+
+func TestOpenObject(t *testing.T) {
+	testCases := []struct {
+		name        string
+		rawRepo     *repomocks.DirectRepository
+		objectID    string
+		retErr      error
+		expectedErr string
+	}{
+		{
+			name:        "raw repo is nil",
+			expectedErr: "repo is closed or not open",
+		},
+		{
+			name:        "objectID is invalid",
+			rawRepo:     repomocks.NewDirectRepository(t),
+			objectID:    "fake-id",
+			expectedErr: "error to parse object ID from fake-id: malformed content ID: \"fake-id\": invalid content prefix",
+		},
+		{
+			name:        "raw open fail",
+			rawRepo:     repomocks.NewDirectRepository(t),
+			retErr:      errors.New("fake-open-error"),
+			expectedErr: "error to open object: fake-open-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawRepo != nil {
+				if tc.retErr != nil {
+					tc.rawRepo.On("OpenObject", mock.Anything, mock.Anything).Return(nil, tc.retErr)
+				}
+
+				kr.rawRepo = tc.rawRepo
+			}
+
+			_, err := kr.OpenObject(context.Background(), udmrepo.ID(tc.objectID))
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestGetManifest(t *testing.T) {
+	testCases := []struct {
+		name        string
+		rawRepo     *repomocks.DirectRepository
+		retErr      error
+		expectedErr string
+	}{
+		{
+			name:        "raw repo is nil",
+			expectedErr: "repo is closed or not open",
+		},
+		{
+			name:        "raw get fail",
+			rawRepo:     repomocks.NewDirectRepository(t),
+			retErr:      errors.New("fake-get-error"),
+			expectedErr: "error to get manifest: fake-get-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawRepo != nil {
+				if tc.retErr != nil {
+					tc.rawRepo.On("GetManifest", mock.Anything, mock.Anything, mock.Anything).Return(nil, tc.retErr)
+				}
+
+				kr.rawRepo = tc.rawRepo
+			}
+
+			err := kr.GetManifest(context.Background(), udmrepo.ID(""), &udmrepo.RepoManifest{})
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestFindManifests(t *testing.T) {
+	testCases := []struct {
+		name        string
+		rawRepo     *repomocks.DirectRepository
+		retErr      error
+		expectedErr string
+	}{
+		{
+			name:        "raw repo is nil",
+			expectedErr: "repo is closed or not open",
+		},
+		{
+			name:        "raw find fail",
+			rawRepo:     repomocks.NewDirectRepository(t),
+			retErr:      errors.New("fake-find-error"),
+			expectedErr: "error to find manifests: fake-find-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawRepo != nil {
+				tc.rawRepo.On("FindManifests", mock.Anything, mock.Anything).Return(nil, tc.retErr)
+				kr.rawRepo = tc.rawRepo
+			}
+
+			_, err := kr.FindManifests(context.Background(), udmrepo.ManifestFilter{})
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestClose(t *testing.T) {
+	testCases := []struct {
+		name            string
+		rawRepo         *repomocks.DirectRepository
+		rawWriter       *repomocks.DirectRepositoryWriter
+		rawRepoRetErr   error
+		rawWriterRetErr error
+		expectedErr     string
+	}{
+		{
+			name: "both nil",
+		},
+		{
+			name:      "writer is not nil",
+			rawWriter: repomocks.NewDirectRepositoryWriter(t),
+		},
+		{
+			name:    "repo is not nil",
+			rawRepo: repomocks.NewDirectRepository(t),
+		},
+		{
+			name:            "writer close error",
+			rawWriter:       repomocks.NewDirectRepositoryWriter(t),
+			rawWriterRetErr: errors.New("fake-writer-close-error"),
+			expectedErr:     "error to close repo writer: fake-writer-close-error",
+		},
+		{
+			name:          "repo is not nil",
+			rawRepo:       repomocks.NewDirectRepository(t),
+			rawRepoRetErr: errors.New("fake-repo-close-error"),
+			expectedErr:   "error to close repo: fake-repo-close-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawRepo != nil {
+				tc.rawRepo.On("Close", mock.Anything).Return(tc.rawRepoRetErr)
+				kr.rawRepo = tc.rawRepo
+			}
+
+			if tc.rawWriter != nil {
+				tc.rawWriter.On("Close", mock.Anything).Return(tc.rawWriterRetErr)
+				kr.rawWriter = tc.rawWriter
+			}
+
+			err := kr.Close(context.Background())
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestPutManifest(t *testing.T) {
+	testCases := []struct {
+		name            string
+		rawWriter       *repomocks.DirectRepositoryWriter
+		rawWriterRetErr error
+		expectedErr     string
+	}{
+		{
+			name:        "raw writer is nil",
+			expectedErr: "repo writer is closed or not open",
+		},
+		{
+			name:            "raw put fail",
+			rawWriter:       repomocks.NewDirectRepositoryWriter(t),
+			rawWriterRetErr: errors.New("fake-writer-put-error"),
+			expectedErr:     "error to put manifest: fake-writer-put-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawWriter != nil {
+				tc.rawWriter.On("PutManifest", mock.Anything, mock.Anything, mock.Anything).Return(manifest.ID(""), tc.rawWriterRetErr)
+				kr.rawWriter = tc.rawWriter
+			}
+
+			_, err := kr.PutManifest(context.Background(), udmrepo.RepoManifest{
+				Metadata: &udmrepo.ManifestEntryMetadata{},
+			})
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestDeleteManifest(t *testing.T) {
+	testCases := []struct {
+		name            string
+		rawWriter       *repomocks.DirectRepositoryWriter
+		rawWriterRetErr error
+		expectedErr     string
+	}{
+		{
+			name:        "raw writer is nil",
+			expectedErr: "repo writer is closed or not open",
+		},
+		{
+			name:            "raw delete fail",
+			rawWriter:       repomocks.NewDirectRepositoryWriter(t),
+			rawWriterRetErr: errors.New("fake-writer-delete-error"),
+			expectedErr:     "error to delete manifest: fake-writer-delete-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawWriter != nil {
+				tc.rawWriter.On("DeleteManifest", mock.Anything, mock.Anything).Return(tc.rawWriterRetErr)
+				kr.rawWriter = tc.rawWriter
+			}
+
+			err := kr.DeleteManifest(context.Background(), udmrepo.ID(""))
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
+func TestFlush(t *testing.T) {
+	testCases := []struct {
+		name            string
+		rawWriter       *repomocks.DirectRepositoryWriter
+		rawWriterRetErr error
+		expectedErr     string
+	}{
+		{
+			name:        "raw writer is nil",
+			expectedErr: "repo writer is closed or not open",
+		},
+		{
+			name:            "raw flush fail",
+			rawWriter:       repomocks.NewDirectRepositoryWriter(t),
+			rawWriterRetErr: errors.New("fake-writer-flush-error"),
+			expectedErr:     "error to flush repo: fake-writer-flush-error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kr := &kopiaRepository{}
+
+			if tc.rawWriter != nil {
+				tc.rawWriter.On("Flush", mock.Anything).Return(tc.rawWriterRetErr)
+				kr.rawWriter = tc.rawWriter
+			}
+
+			err := kr.Flush(context.Background())
+
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
 			}
 		})
 	}

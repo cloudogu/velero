@@ -16,9 +16,9 @@ jobs:
     steps:
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.18
+        go-version: '1.20'
       id: go
 
     - uses: actions/checkout@v3
@@ -64,6 +64,10 @@ jobs:
     - name: Publish container image
       if: github.repository == 'vmware-tanzu/velero'
       run: |
+        sudo swapoff -a
+        sudo rm -f /mnt/swapfile
+        docker image prune -a --force
+              
         # Build and push Velero image to docker registry
         docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_PASSWORD }}
         VERSION=$(./hack/docker-push.sh | grep 'VERSION:' | awk -F: '{print $2}' | xargs)
@@ -99,4 +103,7 @@ jobs:
     - name: Publish container image to GCR
       if: github.repository == 'vmware-tanzu/velero'
       run: |
+        sudo swapoff -a
+        sudo rm -f /mnt/swapfile
+        docker image prune -a --force
         REGISTRY=gcr.io/velero-gcp ./hack/docker-push.sh

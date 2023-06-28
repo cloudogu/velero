@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -39,15 +38,6 @@ import (
 	velerotest "github.com/vmware-tanzu/velero/pkg/test"
 	"github.com/vmware-tanzu/velero/pkg/util/collections"
 )
-
-type mockItemHookHandler struct {
-	mock.Mock
-}
-
-func (h *mockItemHookHandler) HandleHooks(log logrus.FieldLogger, groupResource schema.GroupResource, obj runtime.Unstructured, resourceHooks []ResourceHook, phase hookPhase) error {
-	args := h.Called(log, groupResource, obj, resourceHooks, phase)
-	return args.Error(0)
-}
 
 func TestHandleHooksSkips(t *testing.T) {
 	tests := []struct {
@@ -802,7 +792,7 @@ func TestGetPodExecRestoreHookFromAnnotations(t *testing.T) {
 			expected: &velerov1api.ExecRestoreHook{
 				Command:     []string{"/usr/bin/foo"},
 				Container:   "my-app",
-				ExecTimeout: metav1.Duration{0},
+				ExecTimeout: metav1.Duration{Duration: 0},
 			},
 		},
 		{
@@ -815,7 +805,7 @@ func TestGetPodExecRestoreHookFromAnnotations(t *testing.T) {
 			expected: &velerov1api.ExecRestoreHook{
 				Command:     []string{"/usr/bin/foo"},
 				Container:   "my-app",
-				ExecTimeout: metav1.Duration{0},
+				ExecTimeout: metav1.Duration{Duration: 0},
 			},
 		},
 	}
@@ -866,8 +856,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 				},
@@ -896,8 +886,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 				},
@@ -915,8 +905,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container1",
 								Command:     []string{"/usr/bin/foo"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second},
-								WaitTimeout: metav1.Duration{time.Minute},
+								ExecTimeout: metav1.Duration{Duration: time.Second},
+								WaitTimeout: metav1.Duration{Duration: time.Minute},
 							},
 						},
 					},
@@ -936,8 +926,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 				},
@@ -954,8 +944,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Exec: &velerov1api.ExecRestoreHook{
 								Command:     []string{"/usr/bin/foo"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second},
-								WaitTimeout: metav1.Duration{time.Minute},
+								ExecTimeout: metav1.Duration{Duration: time.Second},
+								WaitTimeout: metav1.Duration{Duration: time.Minute},
 							},
 						},
 					},
@@ -975,8 +965,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 				},
@@ -994,8 +984,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container2",
 								Command:     []string{"/usr/bin/bar"},
 								OnError:     velerov1api.HookErrorModeFail,
-								ExecTimeout: metav1.Duration{time.Hour},
-								WaitTimeout: metav1.Duration{time.Hour},
+								ExecTimeout: metav1.Duration{Duration: time.Hour},
+								WaitTimeout: metav1.Duration{Duration: time.Hour},
 							},
 						},
 					},
@@ -1022,8 +1012,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 				},
@@ -1063,8 +1053,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container1",
 								Command:     []string{"/usr/bin/foo"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second},
-								WaitTimeout: metav1.Duration{time.Minute},
+								ExecTimeout: metav1.Duration{Duration: time.Second},
+								WaitTimeout: metav1.Duration{Duration: time.Minute},
 							},
 						},
 					},
@@ -1085,8 +1075,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container1",
 								Command:     []string{"/usr/bin/foo"},
 								OnError:     velerov1api.HookErrorModeFail,
-								ExecTimeout: metav1.Duration{time.Second},
-								WaitTimeout: metav1.Duration{time.Minute},
+								ExecTimeout: metav1.Duration{Duration: time.Second},
+								WaitTimeout: metav1.Duration{Duration: time.Minute},
 							},
 						},
 						{
@@ -1094,8 +1084,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container2",
 								Command:     []string{"/usr/bin/baz"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second * 3},
-								WaitTimeout: metav1.Duration{time.Second * 3},
+								ExecTimeout: metav1.Duration{Duration: time.Second * 3},
+								WaitTimeout: metav1.Duration{Duration: time.Second * 3},
 							},
 						},
 						{
@@ -1103,8 +1093,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container1",
 								Command:     []string{"/usr/bin/bar"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second * 2},
-								WaitTimeout: metav1.Duration{time.Minute * 2},
+								ExecTimeout: metav1.Duration{Duration: time.Second * 2},
+								WaitTimeout: metav1.Duration{Duration: time.Minute * 2},
 							},
 						},
 					},
@@ -1118,8 +1108,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 								Container:   "container1",
 								Command:     []string{"/usr/bin/aaa"},
 								OnError:     velerov1api.HookErrorModeContinue,
-								ExecTimeout: metav1.Duration{time.Second * 4},
-								WaitTimeout: metav1.Duration{time.Minute * 4},
+								ExecTimeout: metav1.Duration{Duration: time.Second * 4},
+								WaitTimeout: metav1.Duration{Duration: time.Minute * 4},
 							},
 						},
 					},
@@ -1139,8 +1129,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/foo"},
 							OnError:     velerov1api.HookErrorModeFail,
-							ExecTimeout: metav1.Duration{time.Second},
-							WaitTimeout: metav1.Duration{time.Minute},
+							ExecTimeout: metav1.Duration{Duration: time.Second},
+							WaitTimeout: metav1.Duration{Duration: time.Minute},
 						},
 					},
 					{
@@ -1150,8 +1140,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/bar"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second * 2},
-							WaitTimeout: metav1.Duration{time.Minute * 2},
+							ExecTimeout: metav1.Duration{Duration: time.Second * 2},
+							WaitTimeout: metav1.Duration{Duration: time.Minute * 2},
 						},
 					},
 					{
@@ -1161,8 +1151,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container1",
 							Command:     []string{"/usr/bin/aaa"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second * 4},
-							WaitTimeout: metav1.Duration{time.Minute * 4},
+							ExecTimeout: metav1.Duration{Duration: time.Second * 4},
+							WaitTimeout: metav1.Duration{Duration: time.Minute * 4},
 						},
 					},
 				},
@@ -1174,8 +1164,8 @@ func TestGroupRestoreExecHooks(t *testing.T) {
 							Container:   "container2",
 							Command:     []string{"/usr/bin/baz"},
 							OnError:     velerov1api.HookErrorModeContinue,
-							ExecTimeout: metav1.Duration{time.Second * 3},
-							WaitTimeout: metav1.Duration{time.Second * 3},
+							ExecTimeout: metav1.Duration{Duration: time.Second * 3},
+							WaitTimeout: metav1.Duration{Duration: time.Second * 3},
 						},
 					},
 				},
@@ -1342,8 +1332,8 @@ func TestGetRestoreHooksFromSpec(t *testing.T) {
 				{
 					Name: "h1",
 					Selector: ResourceHookSelector{
-						Namespaces: collections.NewIncludesExcludes().Includes([]string{"ns1", "ns2", "ns3"}...).Excludes([]string{"ns4", "ns5", "ns6"}...),
-						Resources:  collections.NewIncludesExcludes().Includes([]string{kuberesource.Pods.Resource}...),
+						Namespaces: collections.NewIncludesExcludes().Includes("ns1", "ns2", "ns3").Excludes("ns4", "ns5", "ns6"),
+						Resources:  collections.NewIncludesExcludes().Includes(kuberesource.Pods.Resource),
 					},
 					RestoreHooks: []velerov1api.RestoreResourceHook{
 						{

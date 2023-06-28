@@ -17,6 +17,7 @@ limitations under the License.
 package install
 
 import (
+	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,8 +28,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	v1crds "github.com/vmware-tanzu/velero/config/crd/v1/crds"
+	v2alpha1crds "github.com/vmware-tanzu/velero/config/crd/v2alpha1/crds"
 	velerov1api "github.com/vmware-tanzu/velero/pkg/apis/velero/v1"
 )
+
+const defaultServiceAccountName = "velero"
 
 var (
 	DefaultVeleroPodCPURequest    = "500m"
@@ -96,7 +100,7 @@ func objectMeta(namespace, name string) metav1.ObjectMeta {
 }
 
 func ServiceAccount(namespace string, annotations map[string]string) *corev1.ServiceAccount {
-	objMeta := objectMeta(namespace, "velero")
+	objMeta := objectMeta(namespace, defaultServiceAccountName)
 	objMeta.Annotations = annotations
 	return &corev1.ServiceAccount{
 		ObjectMeta: objMeta,
@@ -136,13 +140,18 @@ func ClusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
 }
 
 func Namespace(namespace string) *corev1.Namespace {
-	return &corev1.Namespace{
+	ns := &corev1.Namespace{
 		ObjectMeta: objectMeta("", namespace),
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Namespace",
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 	}
+
+	ns.Labels["pod-security.kubernetes.io/enforce"] = "privileged"
+	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "latest"
+
+	return ns
 }
 
 func BackupStorageLocation(namespace, provider, bucket, prefix string, config map[string]string, caCert []byte) *velerov1api.BackupStorageLocation {
@@ -217,6 +226,7 @@ type VeleroOptions struct {
 	PodAnnotations                  map[string]string
 	PodLabels                       map[string]string
 	ServiceAccountAnnotations       map[string]string
+	ServiceAccountName              string
 	VeleroPodResources              corev1.ResourceRequirements
 	NodeAgentPodResources           corev1.ResourceRequirements
 	SecretData                      []byte
@@ -242,7 +252,16 @@ func AllCRDs() *unstructured.UnstructuredList {
 
 	for _, crd := range v1crds.CRDs {
 		crd.SetLabels(Labels())
-		appendUnstructured(resources, crd)
+		if err := appendUnstructured(resources, crd); err != nil {
+			fmt.Printf("error appending v1 CRD %s: %s\n", crd.GetName(), err.Error())
+		}
+	}
+
+	for _, crd := range v2alpha1crds.CRDs {
+		crd.SetLabels(Labels())
+		if err := appendUnstructured(resources, crd); err != nil {
+			fmt.Printf("error appending v2alpha1 CRD %s: %s\n", crd.GetName(), err.Error())
+		}
 	}
 
 	return resources
@@ -254,28 +273,44 @@ func AllResources(o *VeleroOptions) *unstructured.UnstructuredList {
 	resources := AllCRDs()
 
 	ns := Namespace(o.Namespace)
-	appendUnstructured(resources, ns)
+	if err := appendUnstructured(resources, ns); err != nil {
+		fmt.Printf("error appending Namespace %s: %s\n", ns.GetName(), err.Error())
+	}
 
-	crb := ClusterRoleBinding(o.Namespace)
-	appendUnstructured(resources, crb)
-
-	sa := ServiceAccount(o.Namespace, o.ServiceAccountAnnotations)
-	appendUnstructured(resources, sa)
+	serviceAccountName := defaultServiceAccountName
+	if o.ServiceAccountName == "" {
+		crb := ClusterRoleBinding(o.Namespace)
+		if err := appendUnstructured(resources, crb); err != nil {
+			fmt.Printf("error appending ClusterRoleBinding %s: %s\n", crb.GetName(), err.Error())
+		}
+		sa := ServiceAccount(o.Namespace, o.ServiceAccountAnnotations)
+		if err := appendUnstructured(resources, sa); err != nil {
+			fmt.Printf("error appending ServiceAccount %s: %s\n", sa.GetName(), err.Error())
+		}
+	} else {
+		serviceAccountName = o.ServiceAccountName
+	}
 
 	if o.SecretData != nil {
 		sec := Secret(o.Namespace, o.SecretData)
-		appendUnstructured(resources, sec)
+		if err := appendUnstructured(resources, sec); err != nil {
+			fmt.Printf("error appending Secret %s: %s\n", sec.GetName(), err.Error())
+		}
 	}
 
 	if !o.NoDefaultBackupLocation {
 		bsl := BackupStorageLocation(o.Namespace, o.ProviderName, o.Bucket, o.Prefix, o.BSLConfig, o.CACertData)
-		appendUnstructured(resources, bsl)
+		if err := appendUnstructured(resources, bsl); err != nil {
+			fmt.Printf("error appending BackupStorageLocation %s: %s\n", bsl.GetName(), err.Error())
+		}
 	}
 
 	// A snapshot location may not be desirable for users relying on pod volume backup/restore
 	if o.UseVolumeSnapshots {
 		vsl := VolumeSnapshotLocation(o.Namespace, o.ProviderName, o.VSLConfig)
-		appendUnstructured(resources, vsl)
+		if err := appendUnstructured(resources, vsl); err != nil {
+			fmt.Printf("error appending VolumeSnapshotLocation %s: %s\n", vsl.GetName(), err.Error())
+		}
 	}
 
 	secretPresent := o.SecretData != nil
@@ -287,6 +322,7 @@ func AllResources(o *VeleroOptions) *unstructured.UnstructuredList {
 		WithResources(o.VeleroPodResources),
 		WithSecret(secretPresent),
 		WithDefaultRepoMaintenanceFrequency(o.DefaultRepoMaintenanceFrequency),
+		WithServiceAccountName(serviceAccountName),
 		WithGarbageCollectionFrequency(o.GarbageCollectionFrequency),
 		WithUploaderType(o.UploaderType),
 	}
@@ -309,7 +345,9 @@ func AllResources(o *VeleroOptions) *unstructured.UnstructuredList {
 
 	deploy := Deployment(o.Namespace, deployOpts...)
 
-	appendUnstructured(resources, deploy)
+	if err := appendUnstructured(resources, deploy); err != nil {
+		fmt.Printf("error appending Deployment %s: %s\n", deploy.GetName(), err.Error())
+	}
 
 	if o.UseNodeAgent {
 		dsOpts := []podTemplateOption{
@@ -318,12 +356,15 @@ func AllResources(o *VeleroOptions) *unstructured.UnstructuredList {
 			WithImage(o.Image),
 			WithResources(o.NodeAgentPodResources),
 			WithSecret(secretPresent),
+			WithServiceAccountName(serviceAccountName),
 		}
 		if len(o.Features) > 0 {
 			dsOpts = append(dsOpts, WithFeatures(o.Features))
 		}
 		ds := DaemonSet(o.Namespace, dsOpts...)
-		appendUnstructured(resources, ds)
+		if err := appendUnstructured(resources, ds); err != nil {
+			fmt.Printf("error appending DaemonSet %s: %s\n", ds.GetName(), err.Error())
+		}
 	}
 
 	return resources

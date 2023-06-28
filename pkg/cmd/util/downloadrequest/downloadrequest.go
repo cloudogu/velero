@@ -23,9 +23,9 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,11 +60,11 @@ func Stream(ctx context.Context, kbClient kbclient.Client, namespace, name strin
 
 	key := kbclient.ObjectKey{Name: created.Name, Namespace: namespace}
 	timeStreamFirstCheck := time.Now()
-	downloadUrlTimeout := false
+	downloadURLTimeout := false
 	checkFunc := func() {
 		// if timeout has been reached, cancel request
 		if time.Now().After(timeStreamFirstCheck.Add(timeout)) {
-			downloadUrlTimeout = true
+			downloadURLTimeout = true
 			cancel()
 		}
 		updated := &velerov1api.DownloadRequest{}
@@ -85,13 +85,13 @@ func Stream(ctx context.Context, kbClient kbclient.Client, namespace, name strin
 	}
 
 	wait.Until(checkFunc, 25*time.Millisecond, ctx.Done())
-	if downloadUrlTimeout {
+	if downloadURLTimeout {
 		return ErrDownloadRequestDownloadURLTimeout
 	}
 
 	var caPool *x509.CertPool
 	if len(caCertFile) > 0 {
-		caCert, err := ioutil.ReadFile(caCertFile)
+		caCert, err := os.ReadFile(caCertFile)
 		if err != nil {
 			return errors.Wrapf(err, "couldn't open cacert")
 		}
@@ -123,7 +123,7 @@ func Stream(ctx context.Context, kbClient kbclient.Client, namespace, name strin
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
 	}
 
-	httpReq, err := http.NewRequest("GET", created.Status.DownloadURL, nil)
+	httpReq, err := http.NewRequest(http.MethodGet, created.Status.DownloadURL, nil)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func Stream(ctx context.Context, kbClient kbclient.Client, namespace, name strin
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return errors.Wrapf(err, "request failed: unable to decode response body")
 		}

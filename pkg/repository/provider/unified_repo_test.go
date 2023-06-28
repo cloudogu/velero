@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestGetStorageCredentials(t *testing.T) {
 		credStoreError      error
 		credStorePath       string
 		getAzureCredentials func(map[string]string) (string, string, error)
-		getS3Credentials    func(map[string]string) (awscredentials.Value, error)
+		getS3Credentials    func(map[string]string) (*awscredentials.Value, error)
 		getGCPCredentials   func(map[string]string) string
 		expected            map[string]string
 		expectedErr         string
@@ -88,8 +89,8 @@ func TestGetStorageCredentials(t *testing.T) {
 					},
 				},
 			},
-			getS3Credentials: func(config map[string]string) (awscredentials.Value, error) {
-				return awscredentials.Value{
+			getS3Credentials: func(config map[string]string) (*awscredentials.Value, error) {
+				return &awscredentials.Value{
 					AccessKeyID: "from: " + config["credentialsFile"],
 				}, nil
 			},
@@ -114,8 +115,8 @@ func TestGetStorageCredentials(t *testing.T) {
 			},
 			credFileStore: new(credmock.FileStore),
 			credStorePath: "credentials-from-credential-key",
-			getS3Credentials: func(config map[string]string) (awscredentials.Value, error) {
-				return awscredentials.Value{
+			getS3Credentials: func(config map[string]string) (*awscredentials.Value, error) {
+				return &awscredentials.Value{
 					AccessKeyID: "from: " + config["credentialsFile"],
 				}, nil
 			},
@@ -137,12 +138,26 @@ func TestGetStorageCredentials(t *testing.T) {
 					},
 				},
 			},
-			getS3Credentials: func(config map[string]string) (awscredentials.Value, error) {
-				return awscredentials.Value{}, errors.New("fake error")
+			getS3Credentials: func(config map[string]string) (*awscredentials.Value, error) {
+				return nil, errors.New("fake error")
 			},
 			credFileStore: new(credmock.FileStore),
 			expected:      map[string]string{},
 			expectedErr:   "error get s3 credentials: fake error",
+		},
+		{
+			name: "aws, credential file not exist",
+			backupLocation: velerov1api.BackupStorageLocation{
+				Spec: velerov1api.BackupStorageLocationSpec{
+					Provider: "velero.io/aws",
+					Config:   map[string]string{},
+				},
+			},
+			getS3Credentials: func(config map[string]string) (*awscredentials.Value, error) {
+				return nil, nil
+			},
+			credFileStore: new(credmock.FileStore),
+			expected:      map[string]string{},
 		},
 		{
 			name: "azure, Credential section exists in BSL",
@@ -364,6 +379,42 @@ func TestGetStorageVariables(t *testing.T) {
 				"endpoint":      "fake-url",
 				"doNotUseTLS":   "true",
 				"skipTLSVerify": "false",
+			},
+		},
+		{
+			name: "aws, ObjectStorage section exists in BSL, s3Url exist, https, custom CA exist",
+			backupLocation: velerov1api.BackupStorageLocation{
+				Spec: velerov1api.BackupStorageLocationSpec{
+					Provider: "velero.io/aws",
+					Config: map[string]string{
+						"bucket":                "fake-bucket-config",
+						"prefix":                "fake-prefix-config",
+						"region":                "fake-region",
+						"s3Url":                 "https://fake-url/",
+						"insecureSkipTLSVerify": "false",
+					},
+					StorageType: velerov1api.StorageType{
+						ObjectStorage: &velerov1api.ObjectStorageLocation{
+							Bucket: "fake-bucket-object-store",
+							Prefix: "fake-prefix-object-store",
+							CACert: []byte{0x01, 0x02, 0x03, 0x04, 0x05},
+						},
+					},
+				},
+			},
+			getS3BucketRegion: func(bucket string) (string, error) {
+				return "region from bucket: " + bucket, nil
+			},
+			repoBackend: "fake-repo-type",
+			expected: map[string]string{
+				"bucket":        "fake-bucket-object-store",
+				"prefix":        "fake-prefix-object-store/fake-repo-type/",
+				"region":        "fake-region",
+				"fspath":        "",
+				"endpoint":      "fake-url",
+				"doNotUseTLS":   "false",
+				"skipTLSVerify": "false",
+				"customCA":      base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03, 0x04, 0x05}),
 			},
 		},
 		{
@@ -660,9 +711,8 @@ func TestPrepareRepo(t *testing.T) {
 			retFuncInit: func(ctx context.Context, repoOption udmrepo.RepoOptions, createNew bool) error {
 				if !createNew {
 					return nil
-				} else {
-					return errors.New("fake-error")
 				}
+				return errors.New("fake-error")
 			},
 		},
 		{
@@ -681,9 +731,8 @@ func TestPrepareRepo(t *testing.T) {
 			retFuncInit: func(ctx context.Context, repoOption udmrepo.RepoOptions, createNew bool) error {
 				if !createNew {
 					return errors.New("fake-error-1")
-				} else {
-					return errors.New("fake-error-2")
 				}
+				return errors.New("fake-error-2")
 			},
 			expectedErr: "error to init backup repo: fake-error-2",
 		},

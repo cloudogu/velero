@@ -19,7 +19,6 @@ package kopialib
 import (
 	"context"
 	"os"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -74,7 +73,7 @@ type kopiaObjectWriter struct {
 }
 
 const (
-	defaultLogInterval             = time.Duration(time.Second * 10)
+	defaultLogInterval             = time.Second * 10
 	defaultMaintainCheckPeriod     = time.Hour
 	overwriteFullMaintainInterval  = time.Duration(0)
 	overwriteQuickMaintainInterval = time.Duration(0)
@@ -100,9 +99,8 @@ func (ks *kopiaRepoService) Init(ctx context.Context, repoOption udmrepo.RepoOpt
 		}
 
 		return writeInitParameters(repoCtx, repoOption, ks.logger)
-	} else {
-		return ConnectBackupRepo(repoCtx, repoOption)
 	}
+	return ConnectBackupRepo(repoCtx, repoOption)
 }
 
 func (ks *kopiaRepoService) Open(ctx context.Context, repoOption udmrepo.RepoOptions) (udmrepo.BackupRepo, error) {
@@ -235,7 +233,12 @@ func (kr *kopiaRepository) OpenObject(ctx context.Context, id udmrepo.ID) (udmre
 		return nil, errors.New("repo is closed or not open")
 	}
 
-	reader, err := kr.rawRepo.OpenObject(logging.SetupKopiaLog(ctx, kr.logger), object.ID(id))
+	objID, err := object.ParseID(string(id))
+	if err != nil {
+		return nil, errors.Wrapf(err, "error to parse object ID from %v", id)
+	}
+
+	reader, err := kr.rawRepo.OpenObject(logging.SetupKopiaLog(ctx, kr.logger), objID)
 	if err != nil {
 		return nil, errors.Wrap(err, "error to open object")
 	}
@@ -310,8 +313,8 @@ func (kr *kopiaRepository) NewObjectWriter(ctx context.Context, opt udmrepo.Obje
 
 	writer := kr.rawWriter.NewObjectWriter(logging.SetupKopiaLog(ctx, kr.logger), object.WriterOptions{
 		Description: opt.Description,
-		Prefix:      index.ID(opt.Prefix),
-		AsyncWrites: getAsyncWrites(),
+		Prefix:      index.IDPrefix(opt.Prefix),
+		AsyncWrites: opt.AsyncWrites,
 		Compressor:  getCompressorForObject(opt),
 	})
 
@@ -439,7 +442,7 @@ func (kow *kopiaObjectWriter) Checkpoint() (udmrepo.ID, error) {
 		return udmrepo.ID(""), errors.Wrap(err, "error to checkpoint object")
 	}
 
-	return udmrepo.ID(id), nil
+	return udmrepo.ID(id.String()), nil
 }
 
 func (kow *kopiaObjectWriter) Result() (udmrepo.ID, error) {
@@ -452,7 +455,7 @@ func (kow *kopiaObjectWriter) Result() (udmrepo.ID, error) {
 		return udmrepo.ID(""), errors.Wrap(err, "error to wait object")
 	}
 
-	return udmrepo.ID(id), nil
+	return udmrepo.ID(id.String()), nil
 }
 
 func (kow *kopiaObjectWriter) Close() error {
@@ -470,29 +473,24 @@ func (kow *kopiaObjectWriter) Close() error {
 	return nil
 }
 
-// getAsyncWrites returns the number of concurrent async writes
-func getAsyncWrites() int {
-	return runtime.NumCPU()
-}
-
 // getCompressorForObject returns the compressor for an object, at present, we don't support compression
 func getCompressorForObject(opt udmrepo.ObjectWriteOptions) compression.Name {
 	return ""
 }
 
-func getManifestEntryFromKopia(kMani *manifest.EntryMetadata) *udmrepo.ManifestEntryMetadata {
+func getManifestEntryFromKopia(mani *manifest.EntryMetadata) *udmrepo.ManifestEntryMetadata {
 	return &udmrepo.ManifestEntryMetadata{
-		ID:      udmrepo.ID(kMani.ID),
-		Labels:  kMani.Labels,
-		Length:  int32(kMani.Length),
-		ModTime: kMani.ModTime,
+		ID:      udmrepo.ID(mani.ID),
+		Labels:  mani.Labels,
+		Length:  int32(mani.Length),
+		ModTime: mani.ModTime,
 	}
 }
 
-func getManifestEntriesFromKopia(kMani []*manifest.EntryMetadata) []*udmrepo.ManifestEntryMetadata {
+func getManifestEntriesFromKopia(mani []*manifest.EntryMetadata) []*udmrepo.ManifestEntryMetadata {
 	var ret []*udmrepo.ManifestEntryMetadata
 
-	for _, entry := range kMani {
+	for _, entry := range mani {
 		ret = append(ret, &udmrepo.ManifestEntryMetadata{
 			ID:      udmrepo.ID(entry.ID),
 			Labels:  entry.Labels,
@@ -505,9 +503,9 @@ func getManifestEntriesFromKopia(kMani []*manifest.EntryMetadata) []*udmrepo.Man
 }
 
 func (lt *logThrottle) shouldLog() bool {
-	nextOutputTime := atomic.LoadInt64((*int64)(&lt.lastTime))
+	nextOutputTime := atomic.LoadInt64(&lt.lastTime)
 	if nowNano := time.Now().UnixNano(); nowNano > nextOutputTime {
-		if atomic.CompareAndSwapInt64((*int64)(&lt.lastTime), nextOutputTime, nowNano+lt.interval.Nanoseconds()) {
+		if atomic.CompareAndSwapInt64(&lt.lastTime, nextOutputTime, nowNano+lt.interval.Nanoseconds()) {
 			return true
 		}
 	}

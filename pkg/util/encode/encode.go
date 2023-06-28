@@ -18,6 +18,8 @@ package encode
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -33,15 +35,15 @@ import (
 func Encode(obj runtime.Object, format string) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
-	if err := EncodeTo(obj, format, buf); err != nil {
+	if err := To(obj, format, buf); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-// EncodeTo converts the provided object to the specified format and
+// To converts the provided object to the specified format and
 // writes the encoded data to the provided io.Writer.
-func EncodeTo(obj runtime.Object, format string, w io.Writer) error {
+func To(obj runtime.Object, format string, w io.Writer) error {
 	encoder, err := EncoderFor(format, obj)
 	if err != nil {
 		return err
@@ -69,4 +71,27 @@ func EncoderFor(format string, obj runtime.Object) (runtime.Encoder, error) {
 	}
 	encoder = scheme.Codecs.EncoderForVersion(encoder, v1.SchemeGroupVersion)
 	return encoder, nil
+}
+
+// ToJSONGzip takes arbitrary Go data and encodes it to GZip compressed JSON in a buffer, as well as a description of the data to put into an error should encoding fail.
+func ToJSONGzip(data interface{}, desc string) (*bytes.Buffer, []error) {
+	buf := new(bytes.Buffer)
+	gzw := gzip.NewWriter(buf)
+
+	// Since both encoding and closing the gzip writer could fail separately and both errors are useful,
+	// collect both errors to report back.
+	errs := []error{}
+
+	if err := json.NewEncoder(gzw).Encode(data); err != nil {
+		errs = append(errs, errors.Wrapf(err, "error encoding %s", desc))
+	}
+	if err := gzw.Close(); err != nil {
+		errs = append(errs, errors.Wrapf(err, "error closing gzip writer for %s", desc))
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	return buf, nil
 }
