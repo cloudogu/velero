@@ -2,21 +2,22 @@
 
 ## Abstract
 Currently only PersistentVolumes are stored in a Restic/Kopia repository, which means that only they are encrypted and the rest of the backup is not.
-It is desired that the whole backup can be encrypted which overall will lead to better security.
+It is desired that the cluster backup can be encrypted which overall will lead to better security.
 
 ## Background
 As of today, Velero stores only PersistentVolume data in a Restic/Kopia repository.
-This repository is encrypted while the rest of the backup (Kubernetes and backup metadata) is not.
+This repository is encrypted while the rest of the backup is not.
 Backups should be safe against illegal access and tampering.
 It is therefore desired to have the ability to store this data in an encrypted manner.
 
 ## Goals
-- Encryption of all the files of a backup with AES.
+- Encryption of the main cluster backup file with AES.
 - Basic configuration of the encryption, e.g. turning it on and off.
+- Changing the encryption key for future backups while still retaining access to older backups.
 
 ## Non Goals
-- Other ciphers than AES (can be added later)
-- Encrypting the whole backup as a single entity (versus encrypting every file separately)
+- Other ciphers than AES (can be added later).
+- Encrypting the whole backup as a single entity (versus encrypting every file separately).
 - Encrypting only certain files.
 
 
@@ -24,13 +25,15 @@ It is therefore desired to have the ability to store this data in an encrypted m
 The encryption will happen during the backup process before the objects are persisted (e.g. written to an object store).
 Decryption will happen during a restore after the persisted objects have been read.
 The encryption key will be stored in a Kubernetes secret.
-Encryption can be activated in the Velero configuration.
+Encryption can be activated and configured in the Velero configuration.
+Changing the encryption key is done by creating a new secret with the changed encryption key and configuring it in Velero's configuration.
+Each backup contains the name of the used encryption key secret in its metadata.
 
 ## Detailed Design
 TODO
 A detailed design describing how the changes to the product should be made.
 
-The names of types, fields, interfaces, and methods should be agreed on here, not debated in code review.
+The names of types, fields, interfaces and methods should be agreed on here, not debated in code review.
 The same applies to changes in CRDs, YAML examples, and so on.
 
 Ideally the changes should be made in sequence so that the work required to implement this design can be done incrementally, possibly in parallel.
