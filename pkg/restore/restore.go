@@ -52,6 +52,7 @@ import (
 	"github.com/vmware-tanzu/velero/pkg/archive"
 	"github.com/vmware-tanzu/velero/pkg/client"
 	"github.com/vmware-tanzu/velero/pkg/discovery"
+	"github.com/vmware-tanzu/velero/pkg/encryption"
 	"github.com/vmware-tanzu/velero/pkg/features"
 	"github.com/vmware-tanzu/velero/pkg/itemoperation"
 	"github.com/vmware-tanzu/velero/pkg/kuberesource"
@@ -105,6 +106,7 @@ type kubernetesRestorer struct {
 	podGetter                  cache.Getter
 	credentialFileStore        credentials.FileStore
 	kbClient                   crclient.Client
+	encryptionSecret           string
 }
 
 // NewKubernetesRestorer creates a new kubernetesRestorer.
@@ -395,14 +397,21 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 
 	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
 
-	decryptor, err := archive.NewDecryptionReader(ctx.backupReader)
-	if err != nil {
-		ctx.log.Infof("error decrypting backup: %v", err)
-		errs.AddVeleroError(err)
-		return warnings, errs
+	var backupContent io.Reader
+	var err error
+	if ctx.backup.Status.Encryption.IsEncrypted {
+		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret)
+		if err != nil {
+			ctx.log.Infof("error decrypting backup: %v", err)
+			errs.AddVeleroError(err)
+			return warnings, errs
+		}
+
+	} else {
+		backupContent = ctx.backupReader
 	}
 
-	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(decryptor)
+	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(backupContent)
 	if err != nil {
 		ctx.log.Infof("error unzipping and extracting: %v", err)
 		errs.AddVeleroError(err)

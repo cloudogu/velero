@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"github.com/vmware-tanzu/velero/pkg/encryption"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -434,6 +435,10 @@ type BackupStatus struct {
 	// BackupItemAction operations for this backup which ended with an error.
 	// +optional
 	BackupItemOperationsFailed int `json:"backupItemOperationsFailed,omitempty"`
+
+	// Encryption contains metadata about and whether encryption was used.
+	// +optional
+	Encryption encryption.Metadata `json:"encryption,omitempty"`
 }
 
 // BackupProgress stores information about the progress of a Backup's execution.

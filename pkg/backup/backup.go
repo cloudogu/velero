@@ -22,7 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/vmware-tanzu/velero/pkg/archive"
+	"github.com/vmware-tanzu/velero/pkg/encryption"
+	"github.com/vmware-tanzu/velero/pkg/features"
 	"io"
 	"os"
 	"path/filepath"
@@ -85,6 +86,7 @@ type kubernetesBackupper struct {
 	defaultVolumesToFsBackup  bool
 	clientPageSize            int
 	uploaderType              string
+	encryptionSecret          string
 }
 
 func (i *itemKey) String() string {
@@ -112,6 +114,7 @@ func NewKubernetesBackupper(
 	defaultVolumesToFsBackup bool,
 	clientPageSize int,
 	uploaderType string,
+	encryptionSecret string,
 ) (Backupper, error) {
 	return &kubernetesBackupper{
 		kbClient:                  kbClient,
@@ -123,6 +126,7 @@ func NewKubernetesBackupper(
 		defaultVolumesToFsBackup:  defaultVolumesToFsBackup,
 		clientPageSize:            clientPageSize,
 		uploaderType:              uploaderType,
+		encryptionSecret:          encryptionSecret,
 	}, nil
 }
 
@@ -190,25 +194,30 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	backupItemActionResolver framework.BackupItemActionResolverV2,
 	volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
 
-	// Finding: Only the primary backup archive is encrypted here.
-	//			Other archives like logs are still unencrypted.
-
+	var backupContent io.Writer
 	var err error
-	encryptor, err := archive.NewEncryptionWriter(backupFile)
-	if err != nil {
-		log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
-		return err
+	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
+		backupContent, err := encryption.NewEncryptionWriter(backupFile, kb.kbClient, kb.encryptionSecret)
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
+			return err
+		}
+
+		backupRequest.Status.Encryption.IsEncrypted = true
+		backupRequest.Status.Encryption.EncryptionSecret = kb.encryptionSecret
+
+		defer func() {
+			err = backupContent.Close()
+			if err != nil {
+				log.WithError(errors.WithStack(err)).Debugf("Error from backupContent.Close")
+			}
+			backupErr = err
+		}()
+	} else {
+		backupContent = backupFile
 	}
 
-	defer func() {
-		err = encryptor.Close()
-		if err != nil {
-			log.WithError(errors.WithStack(err)).Debugf("Error from encryptor.Close")
-		}
-		backupErr = err
-	}()
-
-	gzippedData := gzip.NewWriter(encryptor)
+	gzippedData := gzip.NewWriter(backupContent)
 	defer gzippedData.Close()
 
 	tw := tar.NewWriter(gzippedData)
