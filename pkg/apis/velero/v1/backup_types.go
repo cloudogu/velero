@@ -493,7 +493,7 @@ type BackupList struct {
 // EncryptionStatus contains information about the encryption of a backup.
 type EncryptionStatus struct {
 	// IsEncrypted indicates whether this backup is encrypted.
-	IsEncrypted bool
+	IsEncrypted bool `json:"isEncrypted,omitempty"`
 	// EncryptionSecret is the name of the secret containing the encryption key used for encryption.
-	EncryptionSecret string
+	EncryptionSecret string `json:"encryptionSecret,omitempty"`
 }
