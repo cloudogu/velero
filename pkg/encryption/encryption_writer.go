@@ -7,8 +7,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewEncryptionWriter(out io.Writer, client crlClient.Client, secretName string) (io.WriteCloser, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName)
+func NewEncryptionWriter(out io.Writer, client crlClient.Client, secretName string, namespace string) (io.WriteCloser, error) {
+	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
 	}
@@ -29,18 +29,29 @@ type encryptionWriter struct {
 	encryptor encryptor
 	plaintext []byte
 	out       io.Writer
+	isClosed  bool
 }
 
 func (ew *encryptionWriter) Write(p []byte) (n int, err error) {
+	if ew.isClosed {
+		return 0, fmt.Errorf("failed to write: encryption writer is closed")
+	}
+
 	ew.plaintext = append(ew.plaintext, p...)
 	return len(p), nil
 }
 
 func (ew *encryptionWriter) Close() error {
+	if ew.isClosed {
+		return nil
+	}
+
 	ciphertext, err := ew.encryptor.encrypt(ew.plaintext)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
+
+	ew.isClosed = true
 
 	_, err = ew.out.Write(ciphertext)
 	if err != nil {

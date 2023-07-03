@@ -78,6 +78,7 @@ type Backupper interface {
 // kubernetesBackupper implements Backupper.
 type kubernetesBackupper struct {
 	kbClient                  kbclient.Client
+	namespace                 string
 	dynamicFactory            client.DynamicFactory
 	discoveryHelper           discovery.Helper
 	podCommandExecutor        podexec.PodCommandExecutor
@@ -106,6 +107,7 @@ func cohabitatingResources() map[string]*cohabitatingResource {
 // NewKubernetesBackupper creates a new kubernetesBackupper.
 func NewKubernetesBackupper(
 	kbClient kbclient.Client,
+	namespace string,
 	discoveryHelper discovery.Helper,
 	dynamicFactory client.DynamicFactory,
 	podCommandExecutor podexec.PodCommandExecutor,
@@ -118,6 +120,7 @@ func NewKubernetesBackupper(
 ) (Backupper, error) {
 	return &kubernetesBackupper{
 		kbClient:                  kbClient,
+		namespace:                 namespace,
 		discoveryHelper:           discoveryHelper,
 		dynamicFactory:            dynamicFactory,
 		podCommandExecutor:        podCommandExecutor,
@@ -195,19 +198,19 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 	volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
 
 	var backupContent io.Writer
-	var err error
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-		backupContent, err := encryption.NewEncryptionWriter(backupFile, kb.kbClient, kb.encryptionSecret)
+		encryptedContent, err := encryption.NewEncryptionWriter(backupFile, kb.kbClient, kb.encryptionSecret, kb.namespace)
 		if err != nil {
 			log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
 			return err
 		}
 
-		backupRequest.Status.Encryption.IsEncrypted = true
-		backupRequest.Status.Encryption.EncryptionSecret = kb.encryptionSecret
+		backupContent = encryptedContent
+		backupRequest.Backup.Status.Encryption.IsEncrypted = true
+		backupRequest.Backup.Status.Encryption.EncryptionSecret = kb.encryptionSecret
 
 		defer func() {
-			err = backupContent.Close()
+			err = encryptedContent.Close()
 			if err != nil {
 				log.WithError(errors.WithStack(err)).Debugf("Error from backupContent.Close")
 			}
@@ -250,6 +253,7 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	log.Infof("Backing up all volumes using pod volume backup: %t", boolptr.IsSetToTrue(backupRequest.Backup.Spec.DefaultVolumesToFsBackup))
 
+	var err error
 	backupRequest.ResourceHooks, err = getResourceHooks(backupRequest.Spec.Hooks.Resources, kb.discoveryHelper)
 	if err != nil {
 		log.WithError(errors.WithStack(err)).Debugf("Error from getResourceHooks")

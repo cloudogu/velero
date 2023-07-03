@@ -106,6 +106,7 @@ type kubernetesRestorer struct {
 	podGetter                  cache.Getter
 	credentialFileStore        credentials.FileStore
 	kbClient                   crclient.Client
+	namespace                  string
 	encryptionSecret           string
 }
 
@@ -124,6 +125,7 @@ func NewKubernetesRestorer(
 	podGetter cache.Getter,
 	credentialStore credentials.FileStore,
 	kbClient crclient.Client,
+	namespace string,
 ) (Restorer, error) {
 	return &kubernetesRestorer{
 		discoveryHelper:            discoveryHelper,
@@ -148,6 +150,7 @@ func NewKubernetesRestorer(
 		podGetter:           podGetter,
 		credentialFileStore: credentialStore,
 		kbClient:            kbClient,
+		namespace:           namespace,
 	}, nil
 }
 
@@ -306,6 +309,7 @@ func (kr *kubernetesRestorer) RestoreWithResolvers(
 		hooksContext:                   hooksCtx,
 		hooksCancelFunc:                hooksCancelFunc,
 		kbClient:                       kr.kbClient,
+		namespace:                      kr.namespace,
 		itemOperationsList:             req.GetItemOperationsList(),
 	}
 
@@ -351,6 +355,7 @@ type restoreContext struct {
 	hooksContext                   go_context.Context
 	hooksCancelFunc                go_context.CancelFunc
 	kbClient                       crclient.Client
+	namespace                      string
 	itemOperationsList             *[]*itemoperation.RestoreOperation
 }
 
@@ -400,7 +405,7 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 	var backupContent io.Reader
 	var err error
 	if ctx.backup.Status.Encryption.IsEncrypted {
-		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret)
+		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
 		if err != nil {
 			ctx.log.Infof("error decrypting backup: %v", err)
 			errs.AddVeleroError(err)

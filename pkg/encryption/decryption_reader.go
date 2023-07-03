@@ -24,8 +24,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewDecryptionReader(in io.Reader, client crlClient.Client, secretName string) (io.Reader, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName)
+func NewDecryptionReader(in io.Reader, client crlClient.Client, secretName string, namespace string) (io.Reader, error) {
+	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
 	}

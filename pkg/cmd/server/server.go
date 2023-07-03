@@ -727,6 +727,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 	if _, ok := enabledRuntimeControllers[controller.Backup]; ok {
 		backupper, err := backup.NewKubernetesBackupper(
 			s.mgr.GetClient(),
+			s.namespace,
 			s.discoveryHelper,
 			client.NewDynamicFactory(s.dynamicClient),
 			podexec.NewPodCommandExecutor(s.kubeClientConfig, s.kubeClient.CoreV1().RESTClient()),
@@ -809,6 +810,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 	if _, ok := enabledRuntimeControllers[controller.BackupFinalizer]; ok {
 		backupper, err := backup.NewKubernetesBackupper(
 			s.mgr.GetClient(),
+			s.namespace,
 			s.discoveryHelper,
 			client.NewDynamicFactory(s.dynamicClient),
 			podexec.NewPodCommandExecutor(s.kubeClientConfig, s.kubeClient.CoreV1().RESTClient()),
@@ -930,6 +932,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 			s.kubeClient.CoreV1().RESTClient(),
 			s.credentialFileStore,
 			s.mgr.GetClient(),
+			s.namespace,
 		)
 
 		cmd.CheckError(err)
