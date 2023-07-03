@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	"github.com/vmware-tanzu/velero/pkg/encryption"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -438,7 +437,7 @@ type BackupStatus struct {
 
 	// Encryption contains metadata about and whether encryption was used.
 	// +optional
-	Encryption encryption.Metadata `json:"encryption,omitempty"`
+	Encryption EncryptionStatus `json:"encryption,omitempty"`
 }
 
 // BackupProgress stores information about the progress of a Backup's execution.
@@ -489,4 +488,12 @@ type BackupList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Backup `json:"items"`
+}
+
+// EncryptionStatus contains information about the encryption of a backup.
+type EncryptionStatus struct {
+	// IsEncrypted indicates whether this backup is encrypted.
+	IsEncrypted bool
+	// EncryptionSecret is the name of the secret containing the encryption key used for encryption.
+	EncryptionSecret string
 }
