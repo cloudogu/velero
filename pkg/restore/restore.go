@@ -406,7 +406,7 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 	if ctx.backup.Status.Encryption.IsEncrypted {
 		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
 		if err != nil {
-			ctx.log.Infof("error decrypting backup: %v", err)
+			ctx.log.Errorf("error decrypting backup: %s", err.Error())
 			errs.AddVeleroError(err)
 			return warnings, errs
 		}
