@@ -23,6 +23,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// NewEncryptionWriter provides a writer that encrypts whatever is written and writes it into the given writer.
+// For encryption, it uses the encryption key from the given secret.
 func NewEncryptionWriter(out io.Writer, client crlClient.Client, secretName string, namespace string) (io.WriteCloser, error) {
 	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
 	if err != nil {

@@ -24,6 +24,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// NewDecryptionReader provides a reader that decrypts the contents of the given reader.
+// For decryption, it uses the encryption key from the given secret.
 func NewDecryptionReader(in io.Reader, client crlClient.Client, secretName string, namespace string) (io.Reader, error) {
 	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
 	if err != nil {
