@@ -136,7 +136,8 @@ import (
 
 const encryptionKeySecretField = "encryptionKey"
 
-func getEncryptionKeyFromSecret(client crlClient.Client, secretName string, namespace string) (string, error) {
+// GetEncryptionKeyFromSecret fetches the secret with the given name in the given namespace.
+func GetEncryptionKeyFromSecret(client crlClient.Client, secretName string, namespace string) (string, error) {
 	secret := v1.Secret{}
 	err := client.Get(context.Background(), crlClient.ObjectKey{Name: secretName, Namespace: namespace}, &secret)
 	if err != nil {
@@ -167,14 +168,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewEncryptionWriter provides a writer that encrypts whatever is written and writes it into the given writer.
-// For encryption, it uses the encryption key from the given secret.
-func NewEncryptionWriter(out io.Writer, client crlClient.Client, secretName string, namespace string) (io.WriteCloser, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
-	}
-
+// NewEncryptionWriter provides a writer that encrypts whatever is written with the given key and writes it into the given writer.
+func NewEncryptionWriter(out io.Writer, encryptionKey string) (io.WriteCloser, error) {
 	encryptor, err := newAesEncryptor(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES encryptor: %w", err)
@@ -237,14 +232,8 @@ import (
 	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewDecryptionReader provides a reader that decrypts the contents of the given reader.
-// For decryption, it uses the encryption key from the given secret.
-func NewDecryptionReader(in io.Reader, client crlClient.Client, secretName string, namespace string) (io.Reader, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
-	}
-
+// NewDecryptionReader provides a reader that decrypts the contents of the given reader with the given key.
+func NewDecryptionReader(in io.Reader, encryptionKey string) (io.Reader, error) {
 	encryptor, err := newAesEncryptor(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES encryptor: %w", err)
@@ -320,11 +309,13 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-		encryptedContent, err := encryption.NewEncryptionWriter(backupFile, kb.kbClient, kb.encryptionSecret, kb.namespace)
-		if err != nil {
-			log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
-			return err
-		}
+        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.namespace)
+        if err != nil {
+            log.WithError(errors.WithStack(err)).Debugf("Error from GetEncryptionKeyFromSecret")
+            return err
+        }
+        
+        encryptedContent, err := encryption.NewEncryptionWriter(backupFile, encryptionKey)
 
 		backupContent = encryptedContent
 		backupRequest.Backup.Status.Encryption.IsEncrypted = true
@@ -377,25 +368,32 @@ type restoreContext struct {
 Decryption then happens in the `execute` method of the `restoreContext`:
 ```go
 func (ctx *restoreContext) execute() (results.Result, results.Result) {
-	warnings, errs := results.Result{}, results.Result{}
-
-	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
-
-	var backupContent io.Reader
-	var err error
-	if ctx.backup.Status.Encryption.IsEncrypted {
-		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
-		if err != nil {
-			ctx.log.Errorf("error decrypting backup: %s", err.Error())
-			errs.AddVeleroError(err)
-			return warnings, errs
-		}
-
-	} else {
-		backupContent = ctx.backupReader
-	}
-
-	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(backupContent)
+    warnings, errs := results.Result{}, results.Result{}
+    
+    ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
+    
+    var backupContent io.Reader
+    var err error
+    if ctx.backup.Status.Encryption.IsEncrypted {
+        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
+    if err != nil {
+        ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
+        errs.AddVeleroError(err)
+        return warnings, errs
+    }
+    
+    backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, encryptionKey)
+    if err != nil {
+        ctx.log.Errorf("error decrypting backup: %s", err.Error())
+        errs.AddVeleroError(err)
+        return warnings, errs
+    }
+    
+    } else {
+        backupContent = ctx.backupReader
+    }
+    
+    dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(backupContent)
 	...
 }
 ```

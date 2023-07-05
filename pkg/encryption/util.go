@@ -26,7 +26,8 @@ import (
 
 const encryptionKeySecretField = "encryptionKey"
 
-func getEncryptionKeyFromSecret(client crlClient.Client, secretName string, namespace string) (string, error) {
+// GetEncryptionKeyFromSecret fetches the secret with the given name in the given namespace.
+func GetEncryptionKeyFromSecret(client crlClient.Client, secretName string, namespace string) (string, error) {
 	secret := v1.Secret{}
 	err := client.Get(context.Background(), crlClient.ObjectKey{Name: secretName, Namespace: namespace}, &secret)
 	if err != nil {

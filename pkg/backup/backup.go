@@ -199,7 +199,13 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-		encryptedContent, err := encryption.NewEncryptionWriter(backupFile, kb.kbClient, kb.encryptionSecret, kb.namespace)
+		encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.namespace)
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from GetEncryptionKeyFromSecret")
+			return err
+		}
+
+		encryptedContent, err := encryption.NewEncryptionWriter(backupFile, encryptionKey)
 		if err != nil {
 			log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
 			return err

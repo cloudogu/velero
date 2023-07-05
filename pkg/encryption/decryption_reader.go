@@ -20,18 +20,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-
-	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewDecryptionReader provides a reader that decrypts the contents of the given reader.
-// For decryption, it uses the encryption key from the given secret.
-func NewDecryptionReader(in io.Reader, client crlClient.Client, secretName string, namespace string) (io.Reader, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
-	}
-
+// NewDecryptionReader provides a reader that decrypts the contents of the given reader with the given key.
+func NewDecryptionReader(in io.Reader, encryptionKey string) (io.Reader, error) {
 	encryptor, err := newAesEncryptor(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES encryptor: %w", err)

@@ -19,18 +19,10 @@ package encryption
 import (
 	"fmt"
 	"io"
-
-	crlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewEncryptionWriter provides a writer that encrypts whatever is written and writes it into the given writer.
-// For encryption, it uses the encryption key from the given secret.
-func NewEncryptionWriter(out io.Writer, client crlClient.Client, secretName string, namespace string) (io.WriteCloser, error) {
-	encryptionKey, err := getEncryptionKeyFromSecret(client, secretName, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get encryption key from secret: %w", err)
-	}
-
+// NewEncryptionWriter provides a writer that encrypts whatever is written with the given key and writes it into the given writer.
+func NewEncryptionWriter(out io.Writer, encryptionKey string) (io.WriteCloser, error) {
 	encryptor, err := newAesEncryptor(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES encryptor: %w", err)
