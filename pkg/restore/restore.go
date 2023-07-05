@@ -107,7 +107,6 @@ type kubernetesRestorer struct {
 	credentialFileStore        credentials.FileStore
 	kbClient                   crclient.Client
 	namespace                  string
-	encryptionSecret           string
 }
 
 // NewKubernetesRestorer creates a new kubernetesRestorer.
