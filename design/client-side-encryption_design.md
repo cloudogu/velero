@@ -325,8 +325,8 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 			err = encryptedContent.Close()
 			if err != nil {
 				log.WithError(errors.WithStack(err)).Debugf("Error from backupContent.Close")
+                backupErr = err
 			}
-			backupErr = err
 		}()
 	} else {
 		backupContent = backupFile
