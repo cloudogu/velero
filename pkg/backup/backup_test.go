@@ -4290,6 +4290,7 @@ func TestBackupEncryption(t *testing.T) {
 			backupFile:       bytes.NewBuffer([]byte{}),
 			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			wantErr: func(t *testing.T, err error) {
+				t.Helper()
 				require.Error(t, err)
 				assert.ErrorContains(t, err, "failed to get encryption key secret 'encryption-key': secrets \"encryption-key\" not found")
 			},
@@ -4300,6 +4301,7 @@ func TestBackupEncryption(t *testing.T) {
 			backupFile:       bytes.NewBuffer([]byte{}),
 			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
 			wantErr: func(t *testing.T, err error) {
+				t.Helper()
 				require.Error(t, err)
 				assert.ErrorContains(t, err, "failed to create AES encryptor: failed to create AES cipher")
 			},
@@ -4310,6 +4312,7 @@ func TestBackupEncryption(t *testing.T) {
 			backupFile:       &errReadWriter{},
 			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			wantErr: func(t *testing.T, err error) {
+				t.Helper()
 				require.Error(t, err)
 				assert.ErrorIs(t, err, assert.AnError)
 				assert.ErrorContains(t, err, "failed to write cipher text to output writer")
@@ -4334,7 +4337,10 @@ func TestBackupEncryption(t *testing.T) {
 				"resources/deployments.apps/namespaces/ns-1/deploy-1.json",
 				"resources/deployments.apps/v1-preferredversion/namespaces/ns-1/deploy-1.json",
 			},
-			wantErr: func(t *testing.T, err error) { require.NoError(t, err) },
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.NoError(t, err)
+			},
 		},
 	}
 
