@@ -97,6 +97,8 @@ func (tw *TarWriter) Add(name string, obj interface{}) *TarWriter {
 }
 
 func (tw *TarWriter) Done() *bytes.Buffer {
+	tw.t.Helper()
+
 	require.NoError(tw.t, tw.tw.Close())
 	require.NoError(tw.t, tw.gzw.Close())
 
