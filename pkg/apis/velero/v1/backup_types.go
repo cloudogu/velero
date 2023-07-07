@@ -505,8 +505,8 @@ type EncryptionStatus struct {
 	IsEncrypted bool `json:"isEncrypted,omitempty"`
 	// KeyRetriever is the source where the encryption key is read from.
 	// +optional
-	KeyRetriever EncryptionKeyRetrieverType `json:"receiverType,omitempty"`
-	// KeyLocation contains configuration values for the key receiver to discern where to read the encryption key.
+	KeyRetriever EncryptionKeyRetrieverType `json:"retrieverType,omitempty"`
+	// KeyLocation contains configuration for the key retriever to discern where to read the encryption key.
 	// +optional
 	KeyLocation EncryptionKeyLocation `json:"keyLocation,omitempty"`
 }

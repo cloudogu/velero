@@ -521,13 +521,19 @@ spec:
                 description: Encryption contains metadata about and whether encryption
                   was used.
                 properties:
-                  encryptionSecret:
-                    description: EncryptionSecret is the name of the secret containing
-                      the encryption key used for encryption.
-                    type: string
                   isEncrypted:
                     description: IsEncrypted indicates whether this backup is encrypted.
                     type: boolean
+                  keyLocation:
+                    additionalProperties:
+                      type: string
+                    description: KeyLocation contains configuration for the key retriever
+                      to discern where to read the encryption key.
+                    type: object
+                  retrieverType:
+                    description: KeyRetriever is the source where the encryption key
+                      is read from.
+                    type: string
                 type: object
               errors:
                 description: Errors is a count of all error messages that were generated

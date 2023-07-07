@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/vmware-tanzu/velero/pkg/encryption"
 	"io"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/vmware-tanzu/velero/pkg/encryption"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

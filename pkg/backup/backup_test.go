@@ -23,13 +23,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/vmware-tanzu/velero/pkg/encryption"
-	"github.com/vmware-tanzu/velero/pkg/features"
 	"io"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vmware-tanzu/velero/pkg/encryption"
+	"github.com/vmware-tanzu/velero/pkg/features"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
