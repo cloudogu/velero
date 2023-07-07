@@ -423,7 +423,6 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 			errs.AddVeleroError(err)
 			return warnings, errs
 		}
-
 	} else {
 		backupContent = ctx.backupReader
 	}
