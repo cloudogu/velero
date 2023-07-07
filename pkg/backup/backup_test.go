@@ -4276,19 +4276,32 @@ func TestBackupEncryption(t *testing.T) {
 	)
 
 	tests := []struct {
-		name             string
-		backup           *velerov1.Backup
-		backupFile       io.ReadWriter
-		encryptionSecret *corev1.Secret
-		apiResources     []*test.APIResource
-		want             []string
-		wantErr          func(t *testing.T, err error)
+		name                 string
+		backup               *velerov1.Backup
+		backupFile           io.ReadWriter
+		configuredSecretName string
+		encryptionSecret     *corev1.Secret
+		apiResources         []*test.APIResource
+		want                 []string
+		wantEncryptionStatus velerov1.EncryptionStatus
+		wantErr              func(t *testing.T, err error)
 	}{
 		{
-			name:             "Should fail to get encryption key secret",
-			backup:           defaultBackup().Result(),
-			backupFile:       bytes.NewBuffer([]byte{}),
-			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			name:                 "Should fail to create encryption key receiver",
+			backup:               defaultBackup().Result(),
+			configuredSecretName: "",
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Result(),
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "could not create encryption key receiver for type 'secret': secret name cannot be empty")
+			},
+		},
+		{
+			name:                 "Should fail to get encryption key secret",
+			backup:               defaultBackup().Result(),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
 				require.Error(t, err)
@@ -4296,10 +4309,11 @@ func TestBackupEncryption(t *testing.T) {
 			},
 		},
 		{
-			name:             "Should fail to create encryption writer",
-			backup:           defaultBackup().Result(),
-			backupFile:       bytes.NewBuffer([]byte{}),
-			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
+			name:                 "Should fail to create encryption writer",
+			backup:               defaultBackup().Result(),
+			backupFile:           bytes.NewBuffer([]byte{}),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
 				require.Error(t, err)
@@ -4307,10 +4321,11 @@ func TestBackupEncryption(t *testing.T) {
 			},
 		},
 		{
-			name:             "Should fail to close encryption writer",
-			backup:           defaultBackup().Result(),
-			backupFile:       &errReadWriter{},
-			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			name:                 "Should fail to close encryption writer",
+			backup:               defaultBackup().Result(),
+			backupFile:           &errReadWriter{},
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
 				require.Error(t, err)
@@ -4319,10 +4334,11 @@ func TestBackupEncryption(t *testing.T) {
 			},
 		},
 		{
-			name:             "Should encrypt backup successfully",
-			backup:           defaultBackup().Result(),
-			backupFile:       bytes.NewBuffer([]byte{}),
-			encryptionSecret: builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			name:                 "Should encrypt backup successfully",
+			backup:               defaultBackup().Result(),
+			backupFile:           bytes.NewBuffer([]byte{}),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			apiResources: []*test.APIResource{
 				test.Namespaces(
 					builder.ForNamespace("ns-1").Result(),
@@ -4336,6 +4352,11 @@ func TestBackupEncryption(t *testing.T) {
 				"resources/namespaces/v1-preferredversion/cluster/ns-1.json",
 				"resources/deployments.apps/namespaces/ns-1/deploy-1.json",
 				"resources/deployments.apps/v1-preferredversion/namespaces/ns-1/deploy-1.json",
+			},
+			wantEncryptionStatus: velerov1.EncryptionStatus{
+				IsEncrypted: true,
+				KeyReceiver: "secret",
+				KeyLocation: velerov1.EncryptionKeyLocation{"namespace": "velero", "secretName": "encryption-key"},
 			},
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
@@ -4356,7 +4377,7 @@ func TestBackupEncryption(t *testing.T) {
 			defer features.NewFeatureFlagSet(originalFeatures...)
 
 			h.backupper.veleroNamespace = velerov1.DefaultNamespace
-			h.backupper.encryptionSecret = encryptionSecretName
+			h.backupper.encryptionSecret = tc.configuredSecretName
 			err := h.backupper.kbClient.Create(context.Background(), tc.encryptionSecret)
 			require.NoError(t, err)
 
@@ -4368,6 +4389,7 @@ func TestBackupEncryption(t *testing.T) {
 
 			tc.wantErr(t, err)
 			if err == nil {
+				assert.Equal(t, tc.wantEncryptionStatus, req.Status.Encryption)
 				assertEncryptedTarballContents(t, tc.backupFile, encryptionKey, append(tc.want, "metadata/version")...)
 			}
 		})

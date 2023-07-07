@@ -490,10 +490,20 @@ type BackupList struct {
 	Items []Backup `json:"items"`
 }
 
+// EncryptionKeyReceiverType is used to decide which encryption.KeyReceiver implementation
+// should be used to read the encryption key.
+type EncryptionKeyReceiverType string
+
+// EncryptionKeyLocation contains configuration values for the encryption.KeyReceiver implementation
+// to discern where to read the encryption key.
+type EncryptionKeyLocation map[string]string
+
 // EncryptionStatus contains information about the encryption of a backup.
 type EncryptionStatus struct {
 	// IsEncrypted indicates whether this backup is encrypted.
 	IsEncrypted bool `json:"isEncrypted,omitempty"`
-	// EncryptionSecret is the name of the secret containing the encryption key used for encryption.
-	EncryptionSecret string `json:"encryptionSecret,omitempty"`
+	// KeyReceiver is the source where the encryption key is read from.
+	KeyReceiver EncryptionKeyReceiverType `json:"receiverType,omitempty"`
+	// KeyLocation contains configuration values for the key receiver to discern where to read the encryption key.
+	KeyLocation EncryptionKeyLocation `json:"keyLocation,omitempty"`
 }

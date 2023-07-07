@@ -932,7 +932,6 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 			s.kubeClient.CoreV1().RESTClient(),
 			s.credentialFileStore,
 			s.mgr.GetClient(),
-			s.namespace,
 		)
 
 		cmd.CheckError(err)
