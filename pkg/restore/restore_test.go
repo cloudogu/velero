@@ -689,7 +689,7 @@ func TestRestoreEncrypted(t *testing.T) {
 		wantResults      func(t *testing.T, res ...Result)
 	}{
 		{
-			name:             "fail to create key receiver",
+			name:             "fail to create key retriever",
 			restore:          defaultRestore().Result(),
 			backup:           defaultBackup().Result(),
 			keyReceiver:      "invalid",

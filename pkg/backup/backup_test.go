@@ -4288,7 +4288,7 @@ func TestBackupEncryption(t *testing.T) {
 		wantErr              func(t *testing.T, err error)
 	}{
 		{
-			name:                 "Should fail to create encryption key receiver",
+			name:                 "Should fail to create encryption key retriever",
 			backup:               defaultBackup().Result(),
 			configuredSecretName: "",
 			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Result(),
