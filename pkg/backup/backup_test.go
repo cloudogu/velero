@@ -4355,7 +4355,7 @@ func TestBackupEncryption(t *testing.T) {
 			features.Enable(velerov1.EncryptionFeatureFlag)
 			defer features.NewFeatureFlagSet(originalFeatures...)
 
-			h.backupper.namespace = velerov1.DefaultNamespace
+			h.backupper.veleroNamespace = velerov1.DefaultNamespace
 			h.backupper.encryptionSecret = encryptionSecretName
 			err := h.backupper.kbClient.Create(context.Background(), tc.encryptionSecret)
 			require.NoError(t, err)

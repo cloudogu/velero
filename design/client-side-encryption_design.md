@@ -284,13 +284,13 @@ The `kubernetesBackupper` gets extended by a namespace and the encryption secret
 ```go
 type kubernetesBackupper struct {
 	...
-	namespace        string
+	veleroNamespace        string
 	encryptionSecret string
 }
 
 func NewKubernetesBackupper(
 	...
-    namespace string,
+    veleroNamespace string,
     encryptionSecret string,
 ) (Backupper, error) {
 	...
@@ -310,7 +310,7 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.namespace)
+        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.veleroNamespace)
         if err != nil {
             log.WithError(errors.WithStack(err)).Debugf("Error from GetEncryptionKeyFromSecret")
             return err
@@ -344,12 +344,12 @@ The `kubernetesRestorer` gets extended by a namespace:
 ```go
 type kubernetesRestorer struct {
 	...
-	namespace string
+	veleroNamespace string
 }
 
 func NewKubernetesRestorer(
     ...
-    namespace string,
+    veleroNamespace string,
 ) (Restorer, error) {
 	...
 }
@@ -362,7 +362,7 @@ The namespace also needs to be passed to `restoreContext`:
 ```go
 type restoreContext struct {
 	...
-	namespace string
+	veleroNamespace string
 }
 ```
 
@@ -376,7 +376,7 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
     var backupContent io.Reader
     var err error
     if ctx.backup.Status.Encryption.IsEncrypted {
-        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
+        encryptionKey, err := encryption.GetEncryptionKeyFromSecret(ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.veleroNamespace)
     if err != nil {
         ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
         errs.AddVeleroError(err)

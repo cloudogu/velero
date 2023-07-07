@@ -78,7 +78,7 @@ type Backupper interface {
 // kubernetesBackupper implements Backupper.
 type kubernetesBackupper struct {
 	kbClient                  kbclient.Client
-	namespace                 string
+	veleroNamespace           string
 	dynamicFactory            client.DynamicFactory
 	discoveryHelper           discovery.Helper
 	podCommandExecutor        podexec.PodCommandExecutor
@@ -107,7 +107,7 @@ func cohabitatingResources() map[string]*cohabitatingResource {
 // NewKubernetesBackupper creates a new kubernetesBackupper.
 func NewKubernetesBackupper(
 	kbClient kbclient.Client,
-	namespace string,
+	veleroNamespace string,
 	discoveryHelper discovery.Helper,
 	dynamicFactory client.DynamicFactory,
 	podCommandExecutor podexec.PodCommandExecutor,
@@ -120,7 +120,7 @@ func NewKubernetesBackupper(
 ) (Backupper, error) {
 	return &kubernetesBackupper{
 		kbClient:                  kbClient,
-		namespace:                 namespace,
+		veleroNamespace:           veleroNamespace,
 		discoveryHelper:           discoveryHelper,
 		dynamicFactory:            dynamicFactory,
 		podCommandExecutor:        podCommandExecutor,
@@ -199,7 +199,7 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-		encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.namespace)
+		encryptionKey, err := encryption.GetEncryptionKeyFromSecret(kb.kbClient, kb.encryptionSecret, kb.veleroNamespace)
 		if err != nil {
 			log.WithError(errors.WithStack(err)).Debugf("Error from GetEncryptionKeyFromSecret")
 			return err

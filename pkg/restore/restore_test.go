@@ -736,7 +736,7 @@ func TestRestoreEncrypted(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.restorer.namespace = velerov1api.DefaultNamespace
+			h.restorer.veleroNamespace = velerov1api.DefaultNamespace
 
 			tc.backup.Status.Encryption.IsEncrypted = true
 			tc.backup.Status.Encryption.EncryptionSecret = encryptionSecretName

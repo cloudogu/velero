@@ -106,7 +106,7 @@ type kubernetesRestorer struct {
 	podGetter                  cache.Getter
 	credentialFileStore        credentials.FileStore
 	kbClient                   crclient.Client
-	namespace                  string
+	veleroNamespace            string
 }
 
 // NewKubernetesRestorer creates a new kubernetesRestorer.
@@ -124,7 +124,7 @@ func NewKubernetesRestorer(
 	podGetter cache.Getter,
 	credentialStore credentials.FileStore,
 	kbClient crclient.Client,
-	namespace string,
+	veleroNamespace string,
 ) (Restorer, error) {
 	return &kubernetesRestorer{
 		discoveryHelper:            discoveryHelper,
@@ -149,7 +149,7 @@ func NewKubernetesRestorer(
 		podGetter:           podGetter,
 		credentialFileStore: credentialStore,
 		kbClient:            kbClient,
-		namespace:           namespace,
+		veleroNamespace:     veleroNamespace,
 	}, nil
 }
 
@@ -308,7 +308,7 @@ func (kr *kubernetesRestorer) RestoreWithResolvers(
 		hooksContext:                   hooksCtx,
 		hooksCancelFunc:                hooksCancelFunc,
 		kbClient:                       kr.kbClient,
-		namespace:                      kr.namespace,
+		veleroNamespace:                kr.veleroNamespace,
 		itemOperationsList:             req.GetItemOperationsList(),
 	}
 
@@ -354,7 +354,7 @@ type restoreContext struct {
 	hooksContext                   go_context.Context
 	hooksCancelFunc                go_context.CancelFunc
 	kbClient                       crclient.Client
-	namespace                      string
+	veleroNamespace                string
 	itemOperationsList             *[]*itemoperation.RestoreOperation
 }
 
@@ -404,7 +404,7 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 	var backupContent io.Reader
 	var err error
 	if ctx.backup.Status.Encryption.IsEncrypted {
-		encryptionKey, err := encryption.GetEncryptionKeyFromSecret(ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.namespace)
+		encryptionKey, err := encryption.GetEncryptionKeyFromSecret(ctx.kbClient, ctx.backup.Status.Encryption.EncryptionSecret, ctx.veleroNamespace)
 		if err != nil {
 			ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
 			errs.AddVeleroError(err)
