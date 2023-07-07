@@ -16,22 +16,23 @@ It is therefore desired to have the ability to store this data in an encrypted m
 
 - Encryption of the main cluster backup file with AES.
 - Basic configuration of the encryption, e.g. turning it on and off.
-- Changing the encryption key for future backups while still retaining access to older backups.
+- Ability to change encryption key for future backups
 
 ## Non Goals
 
 - Other ciphers than AES (can be added later).
 - Encrypting anything other than the main backup file.
+- re-encrypt old backups if new encryption key was set
 
 ## High-Level Design
 
 Encryption will happen during the backup process before the objects are persisted (e.g. written to an object store).
 Decryption will happen during a restore after the persisted objects have been read.
-The encryption key will be stored in a Kubernetes secret.
+The encryption key will be stored in a Kubernetes secret by the user.
 Encryption can be configured through commandline arguments to the velero server.
-Changing the encryption key is done by creating a new secret with the changed encryption key and configuring it in Velero's configuration.
+The user can change the encryption key by creating a new encryption key secret and configuring it in Velero's configuration.
 If a backup is encrypted, it contains a flag and the name of the used encryption key secret in its metadata.
-For backwards compatability reasons, only the main backup archive will be encrypted.
+For backwards compatibility reasons, only the main backup archive will be encrypted.
 
 ## Detailed Design
 
@@ -435,11 +436,11 @@ Therefore, only the main backup archive is encrypted.
 
 If unencrypted backups exist when the feature is activated, they will stay unencrypted and can still be restored.
 Likewise, when the feature gets disabled, encrypted backups can still be decrypted.
-It is also possible to change the encryption key without loosing access to previous backups.
+It is also possible to change the encryption key without losing access to previous backups.
 This is due to the backups containing metadata about their encryption.
 If this metadata is absent, the backup is assumed to be unencrypted.
 Currently, this encryption status contains a flag whether the backup is encrypted, as well as the name of the secret containing the key it was encrypted with.
-In the future, the encryption status can be extended by the type of encryption without loosing backwards compatability by assuming the default to be AES.
+In the future, the encryption status can be extended by the type of encryption without losing backwards compatibility by assuming the default to be AES.
 
 There should be no breaking changes.
 
@@ -447,7 +448,7 @@ There should be no breaking changes.
 
 A working prototype already exists.
 Therefore, minimal effort is needed to implement this.
-Timelines are almost entirely dependent on how fast this goes through and how many things need changing before it can.
+Timelines are almost entirely dependent on how fast this goes through and how many things need to be changed before it can be merged.
 
 Since this is a feature that we ([Cloudogu GmbH](https://cloudogu.com)) need, we agree to contribute this feature.
 
