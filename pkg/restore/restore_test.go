@@ -680,7 +680,7 @@ func TestRestoreEncrypted(t *testing.T) {
 		name             string
 		restore          *velerov1api.Restore
 		backup           *velerov1api.Backup
-		keyReceiver      velerov1api.EncryptionKeyReceiverType
+		keyReceiver      velerov1api.EncryptionKeyRetrieverType
 		encryptionSecret *corev1api.Secret
 		apiResources     []*test.APIResource
 		tarball          io.Reader
@@ -705,7 +705,7 @@ func TestRestoreEncrypted(t *testing.T) {
 			name:             "fail to get encryption key secret",
 			restore:          defaultRestore().Result(),
 			backup:           defaultBackup().Result(),
-			keyReceiver:      encryption.SecretKeyReceiverType,
+			keyReceiver:      encryption.SecretKeyRetrieverType,
 			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			want:             map[*test.APIResource][]string{},
 			wantResults: func(t *testing.T, res ...Result) {
@@ -719,7 +719,7 @@ func TestRestoreEncrypted(t *testing.T) {
 			name:             "fail to create encryption reader",
 			restore:          defaultRestore().Result(),
 			backup:           defaultBackup().Result(),
-			keyReceiver:      encryption.SecretKeyReceiverType,
+			keyReceiver:      encryption.SecretKeyRetrieverType,
 			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
 			want:             map[*test.APIResource][]string{},
 			wantResults: func(t *testing.T, res ...Result) {
@@ -733,7 +733,7 @@ func TestRestoreEncrypted(t *testing.T) {
 			name:             "backup gets decrypted successfully",
 			restore:          defaultRestore().Result(),
 			backup:           defaultBackup().Result(),
-			keyReceiver:      encryption.SecretKeyReceiverType,
+			keyReceiver:      encryption.SecretKeyRetrieverType,
 			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
 			apiResources: []*test.APIResource{
 				test.Pods(),
@@ -757,7 +757,7 @@ func TestRestoreEncrypted(t *testing.T) {
 			h := newHarness(t)
 
 			tc.backup.Status.Encryption.IsEncrypted = true
-			tc.backup.Status.Encryption.KeyReceiver = tc.keyReceiver
+			tc.backup.Status.Encryption.KeyRetriever = tc.keyReceiver
 			tc.backup.Status.Encryption.KeyLocation = encryption.SecretKeyLocation(encryptionSecretName, velerov1api.DefaultNamespace)
 			require.NoError(t, h.restorer.kbClient.Create(context.Background(), tc.encryptionSecret))
 

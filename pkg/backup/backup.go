@@ -199,18 +199,18 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-		encryptionKeyReceiver, err := encryption.KeyReceiverFor(encryption.SecretKeyReceiverType,
+		encryptionKeyRetriever, err := encryption.KeyRetrieverFor(encryption.SecretKeyRetrieverType,
 			encryption.SecretKeyLocation(kb.encryptionSecret, kb.veleroNamespace),
 			kb.kbClient,
 		)
 		if err != nil {
-			log.WithError(errors.WithStack(err)).Debugf("Error from KeyReceiverFor")
+			log.WithError(errors.WithStack(err)).Debugf("Error from KeyRetrieverFor")
 			return err
 		}
 
-		encryptionKey, err := encryptionKeyReceiver.GetKey()
+		encryptionKey, err := encryptionKeyRetriever.GetKey()
 		if err != nil {
-			log.WithError(errors.WithStack(err)).Debugf("Error from encryptionKeyReceiver.GetKey")
+			log.WithError(errors.WithStack(err)).Debugf("Error from encryptionKeyRetriever.GetKey")
 			return err
 		}
 
@@ -222,8 +222,8 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
 		backupContent = encryptedContent
 		backupRequest.Backup.Status.Encryption.IsEncrypted = true
-		backupRequest.Backup.Status.Encryption.KeyReceiver = encryptionKeyReceiver.ReceiverType()
-		backupRequest.Backup.Status.Encryption.KeyLocation = encryptionKeyReceiver.KeyLocation()
+		backupRequest.Backup.Status.Encryption.KeyRetriever = encryptionKeyRetriever.RetrieverType()
+		backupRequest.Backup.Status.Encryption.KeyLocation = encryptionKeyRetriever.KeyLocation()
 
 		defer func() {
 			err = encryptedContent.Close()

@@ -230,11 +230,11 @@ type BackupStatus struct {
     Encryption EncryptionStatus `json:"encryption,omitempty"`
 }
 
-// EncryptionKeyReceiverType is used to decide which encryption.KeyReceiver implementation
+// EncryptionKeyRetrieverType is used to decide which encryption.KeyRetriever implementation
 // should be used to read the encryption key.
-type EncryptionKeyReceiverType string
+type EncryptionKeyRetrieverType string
 
-// EncryptionKeyLocation contains configuration values for the encryption.KeyReceiver implementation
+// EncryptionKeyLocation contains configuration values for the encryption.KeyRetriever implementation
 // to discern where to read the encryption key.
 type EncryptionKeyLocation map[string]string
 
@@ -242,43 +242,43 @@ type EncryptionKeyLocation map[string]string
 type EncryptionStatus struct {
     // IsEncrypted indicates whether this backup is encrypted.
     IsEncrypted bool `json:"isEncrypted,omitempty"`
-    // KeyReceiver is the source where the encryption key is read from.
-    KeyReceiver EncryptionKeyReceiverType `json:"receiverType,omitempty"`
-    // KeyLocation contains configuration values for the key receiver to discern where to read the encryption key.
+    // KeyRetriever is the source where the encryption key is read from.
+    KeyRetriever EncryptionKeyRetrieverType `json:"retrieverType,omitempty"`
+    // KeyLocation contains configuration values for the key retriever to discern where to read the encryption key.
     KeyLocation EncryptionKeyLocation `json:"keyLocation,omitempty"`
 }
 ```
 
 ### Retrieving the encryption key
 
-To allow for different methods of storing and retrieving encryption keys, the `encryption.KeyReceiver` interface has been introduced:
+To allow for different methods of storing and retrieving encryption keys, the `encryption.KeyRetriever` interface has been introduced:
 
 ```go
-const SecretKeyReceiverType velerov1.EncryptionKeyReceiverType = "secret"
+const SecretKeyRetrieverType velerov1.EncryptionKeyRetrieverType = "secret"
 
-type KeyReceiver interface {
+type KeyRetriever interface {
 	GetKey() (string, error)
-	ReceiverType() velerov1.EncryptionKeyReceiverType
+	RetrieverType() velerov1.EncryptionKeyRetrieverType
 	KeyLocation() velerov1.EncryptionKeyLocation
 }
 
-func KeyReceiverFor(receiverType velerov1.EncryptionKeyReceiverType, keyLocation velerov1.EncryptionKeyLocation, client crlClient.Client) (receiver KeyReceiver, err error) {
+func KeyRetrieverFor(retrieverType velerov1.EncryptionKeyRetrieverType, keyLocation velerov1.EncryptionKeyLocation, client crlClient.Client) (retriever KeyRetriever, err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("could not create encryption key receiver for type '%s': %w", receiverType, err)
+			err = fmt.Errorf("could not create encryption key retriever for type '%s': %w", retrieverType, err)
 		}
 	}()
 
-	switch receiverType {
-	case SecretKeyReceiverType:
-		return newSecretKeyReceiver(client, keyLocation)
+	switch retrieverType {
+	case SecretKeyRetrieverType:
+		return newSecretKeyRetriever(client, keyLocation)
 	default:
-		return nil, fmt.Errorf("could not find encryption key receiver for type '%s'", receiverType)
+		return nil, fmt.Errorf("could not find encryption key retriever for type '%s'", retrieverType)
 	}
 }
 ```
 
-For now, the only key receiver that will be implemented is the `secretKeyReceiver` which fetches the key from a Kubernetes secret:
+For now, the only key retriever that will be implemented is the `secretKeyRetriever` which fetches the key from a Kubernetes secret:
 
 ```go
 const encryptionKeySecretField = "encryptionKey"
@@ -288,13 +288,13 @@ const (
 	locationSecretNameKey = "secretName"
 )
 
-type secretKeyReceiver struct {
+type secretKeyRetriever struct {
 	client     crlClient.Client
 	secretName string
 	namespace  string
 }
 
-func newSecretKeyReceiver(client crlClient.Client, keyLocation velerov1.EncryptionKeyLocation) (*secretKeyReceiver, error) {
+func newSecretKeyRetriever(client crlClient.Client, keyLocation velerov1.EncryptionKeyLocation) (*secretKeyRetriever, error) {
 	secretName := keyLocation[locationSecretNameKey]
 	if secretName == "" {
 		return nil, fmt.Errorf("secret name cannot be empty")
@@ -305,18 +305,18 @@ func newSecretKeyReceiver(client crlClient.Client, keyLocation velerov1.Encrypti
 		return nil, fmt.Errorf("namespace cannot be empty")
 	}
 
-	return &secretKeyReceiver{client: client, secretName: secretName, namespace: namespace}, nil
+	return &secretKeyRetriever{client: client, secretName: secretName, namespace: namespace}, nil
 }
 
-func (s *secretKeyReceiver) ReceiverType() velerov1.EncryptionKeyReceiverType {
-	return SecretKeyReceiverType
+func (s *secretKeyRetriever) RetrieverType() velerov1.EncryptionKeyRetrieverType {
+	return SecretKeyRetrieverType
 }
 
-func (s *secretKeyReceiver) KeyLocation() velerov1.EncryptionKeyLocation {
+func (s *secretKeyRetriever) KeyLocation() velerov1.EncryptionKeyLocation {
 	return SecretKeyLocation(s.secretName, s.namespace)
 }
 
-func (s *secretKeyReceiver) GetKey() (string, error) {
+func (s *secretKeyRetriever) GetKey() (string, error) {
 	secret := corev1.Secret{}
 	err := s.client.Get(context.Background(), crlClient.ObjectKey{Name: s.secretName, Namespace: s.namespace}, &secret)
 	if err != nil {
@@ -371,18 +371,18 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 
     var backupContent io.Writer
     if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
-        encryptionKeyReceiver, err := encryption.KeyReceiverFor(encryption.SecretKeyReceiverType,
+        encryptionKeyRetriever, err := encryption.KeyRetrieverFor(encryption.SecretKeyRetrieverType,
         encryption.SecretKeyLocation(kb.encryptionSecret, kb.veleroNamespace),
         kb.kbClient,
     )
     if err != nil {
-        log.WithError(errors.WithStack(err)).Debugf("Error from KeyReceiverFor")
+        log.WithError(errors.WithStack(err)).Debugf("Error from KeyRetrieverFor")
         return err
     }
     
-    encryptionKey, err := encryptionKeyReceiver.GetKey()
+    encryptionKey, err := encryptionKeyRetriever.GetKey()
     if err != nil {
-        log.WithError(errors.WithStack(err)).Debugf("Error from encryptionKeyReceiver.GetKey")
+        log.WithError(errors.WithStack(err)).Debugf("Error from encryptionKeyRetriever.GetKey")
         return err
     }
     
@@ -394,8 +394,8 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
     
     backupContent = encryptedContent
     backupRequest.Backup.Status.Encryption.IsEncrypted = true
-    backupRequest.Backup.Status.Encryption.KeyReceiver = encryptionKeyReceiver.ReceiverType()
-    backupRequest.Backup.Status.Encryption.KeyLocation = encryptionKeyReceiver.KeyLocation()
+    backupRequest.Backup.Status.Encryption.KeyRetriever = encryptionKeyRetriever.RetrieverType()
+    backupRequest.Backup.Status.Encryption.KeyLocation = encryptionKeyRetriever.KeyLocation()
     
     defer func() {
         err = encryptedContent.Close()
@@ -451,14 +451,14 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
     var backupContent io.Reader
     var err error
     if ctx.backup.Status.Encryption.IsEncrypted {
-        encryptionKeyReceiver, err := encryption.KeyReceiverFor(ctx.backup.Status.Encryption.KeyReceiver, ctx.backup.Status.Encryption.KeyLocation, ctx.kbClient)
+        encryptionKeyRetriever, err := encryption.KeyRetrieverFor(ctx.backup.Status.Encryption.KeyRetriever, ctx.backup.Status.Encryption.KeyLocation, ctx.kbClient)
     if err != nil {
-        ctx.log.Errorf("error creating encryption key receiver: %s", err.Error())
+        ctx.log.Errorf("error creating encryption key retriever: %s", err.Error())
         errs.AddVeleroError(err)
         return warnings, errs
     }
     
-    encryptionKey, err := encryptionKeyReceiver.GetKey()
+    encryptionKey, err := encryptionKeyRetriever.GetKey()
     if err != nil {
         ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
         errs.AddVeleroError(err)

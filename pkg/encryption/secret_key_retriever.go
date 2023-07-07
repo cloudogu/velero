@@ -17,13 +17,13 @@ const (
 	locationSecretNameKey = "secretName"
 )
 
-type secretKeyReceiver struct {
+type secretKeyRetriever struct {
 	client     crlClient.Client
 	secretName string
 	namespace  string
 }
 
-func newSecretKeyReceiver(client crlClient.Client, keyLocation velerov1.EncryptionKeyLocation) (*secretKeyReceiver, error) {
+func newSecretKeyRetriever(client crlClient.Client, keyLocation velerov1.EncryptionKeyLocation) (*secretKeyRetriever, error) {
 	secretName := keyLocation[locationSecretNameKey]
 	if secretName == "" {
 		return nil, fmt.Errorf("secret name cannot be empty")
@@ -34,18 +34,18 @@ func newSecretKeyReceiver(client crlClient.Client, keyLocation velerov1.Encrypti
 		return nil, fmt.Errorf("namespace cannot be empty")
 	}
 
-	return &secretKeyReceiver{client: client, secretName: secretName, namespace: namespace}, nil
+	return &secretKeyRetriever{client: client, secretName: secretName, namespace: namespace}, nil
 }
 
-func (s *secretKeyReceiver) ReceiverType() velerov1.EncryptionKeyReceiverType {
-	return SecretKeyReceiverType
+func (s *secretKeyRetriever) RetrieverType() velerov1.EncryptionKeyRetrieverType {
+	return SecretKeyRetrieverType
 }
 
-func (s *secretKeyReceiver) KeyLocation() velerov1.EncryptionKeyLocation {
+func (s *secretKeyRetriever) KeyLocation() velerov1.EncryptionKeyLocation {
 	return SecretKeyLocation(s.secretName, s.namespace)
 }
 
-func (s *secretKeyReceiver) GetKey() (string, error) {
+func (s *secretKeyRetriever) GetKey() (string, error) {
 	secret := corev1.Secret{}
 	err := s.client.Get(context.Background(), crlClient.ObjectKey{Name: s.secretName, Namespace: s.namespace}, &secret)
 	if err != nil {
