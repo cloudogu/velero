@@ -83,15 +83,18 @@ func (aes *aesEncryptor) encrypt(plaintext []byte) ([]byte, error) {
 }
 
 func (aes *aesEncryptor) decrypt(ciphertext []byte) ([]byte, error) {
-	nonceSize := aes.gcm.NonceSize()
-	nonce, cipherBytesWithoutNonce := ciphertext[:nonceSize], ciphertext[nonceSize:]
+    nonceSize := aes.gcm.NonceSize()
+    if len(ciphertext) <= nonceSize {
+        return nil, fmt.Errorf("failed to decrypt: ciphertext (length %d) too short", len(ciphertext))
+    }
 
-	plainBytes, err := aes.gcm.Open(nil, nonce, cipherBytesWithoutNonce, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt ciphertext: %w", err)
-	}
+    nonce, cipherBytesWithoutNonce := ciphertext[:nonceSize], ciphertext[nonceSize:]
+    plainBytes, err := aes.gcm.Open(nil, nonce, cipherBytesWithoutNonce, nil)
+    if err != nil {
+        return nil, fmt.Errorf("failed to decrypt ciphertext: %w", err)
+    }
 
-	return plainBytes, nil
+    return plainBytes, nil
 }
 
 func newAesEncryptor(key string) (*aesEncryptor, error) {
