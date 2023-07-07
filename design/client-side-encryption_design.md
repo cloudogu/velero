@@ -401,6 +401,13 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 
 ## Alternatives Considered
 
+There are other ways this could be implemented.
+One valid way would be to do it on a per-backup basis instead of globally.
+This could be implemented by adding the fields `isEncrypted` and `encryptionSecret` to the backup spec instead of its status.
+An advantage of this would be that there is no need for a feature flag  or the `encryptionSecret` flag anymore.
+On the other hand, it would be fatal if a user forgets to encrypt the backup.
+But as most users will likely automate their backups anyway, this shouldn't pose that much of a problem.
+
 This could also be implemented in object store plugins.
 Then however, it has to be implemented in every single object store plugin.
 This is not viable.
@@ -457,6 +464,8 @@ Since this is a feature that we ([Cloudogu GmbH](https://cloudogu.com)) need, we
 As described under [Security Considerations](#security-considerations), only the main backup archive is encrypted.
 While this is already a major step, it would probably even better if we could encrypt the entire backup.
 However, this is not possible without introducing breaking changes.
+
+It is unclear if a default encryption key should be generated if none is specified.
 
 It would be nice to implement different encryption standards besides AES.
 If the need exists, this can be added in the future.
