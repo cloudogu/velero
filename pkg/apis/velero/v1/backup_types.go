@@ -494,19 +494,19 @@ type BackupList struct {
 // should be used to read the encryption key.
 type EncryptionKeyRetrieverType string
 
-// EncryptionKeyLocation contains configuration values for the encryption.KeyRetriever implementation
+// EncryptionKeyRetrieverConfig contains configuration values for the encryption.KeyRetriever implementation
 // to discern where to read the encryption key.
-type EncryptionKeyLocation map[string]string
+type EncryptionKeyRetrieverConfig map[string]string
 
 // EncryptionStatus contains information about the encryption of a backup.
 type EncryptionStatus struct {
 	// IsEncrypted indicates whether this backup is encrypted.
 	// +optional
 	IsEncrypted bool `json:"isEncrypted,omitempty"`
-	// KeyRetriever is the source where the encryption key is read from.
+	// KeyRetrieverType is the source the encryption key is read from.
 	// +optional
-	KeyRetriever EncryptionKeyRetrieverType `json:"retrieverType,omitempty"`
-	// KeyLocation contains configuration for the key retriever to discern where to read the encryption key.
+	KeyRetrieverType EncryptionKeyRetrieverType `json:"keyRetrieverType,omitempty"`
+	// KeyRetrieverConfig contains configuration for a key retriever to fetch the encryption key.
 	// +optional
-	KeyLocation EncryptionKeyLocation `json:"keyLocation,omitempty"`
+	KeyRetrieverConfig EncryptionKeyRetrieverConfig `json:"keyRetrieverConfig,omitempty"`
 }

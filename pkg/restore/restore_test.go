@@ -758,8 +758,8 @@ func TestRestoreEncrypted(t *testing.T) {
 			h := newHarness(t)
 
 			tc.backup.Status.Encryption.IsEncrypted = true
-			tc.backup.Status.Encryption.KeyRetriever = tc.keyReceiver
-			tc.backup.Status.Encryption.KeyLocation = encryption.SecretKeyLocation(encryptionSecretName, velerov1api.DefaultNamespace)
+			tc.backup.Status.Encryption.KeyRetrieverType = tc.keyReceiver
+			tc.backup.Status.Encryption.KeyRetrieverConfig = encryption.SecretKeyConfig(encryptionSecretName, velerov1api.DefaultNamespace)
 			require.NoError(t, h.restorer.kbClient.Create(context.Background(), tc.encryptionSecret))
 
 			for _, r := range tc.apiResources {

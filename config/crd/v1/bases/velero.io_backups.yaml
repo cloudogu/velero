@@ -524,14 +524,14 @@ spec:
                   isEncrypted:
                     description: IsEncrypted indicates whether this backup is encrypted.
                     type: boolean
-                  keyLocation:
+                  keyRetrieverConfig:
                     additionalProperties:
                       type: string
-                    description: KeyLocation contains configuration for the key retriever
-                      to discern where to read the encryption key.
+                    description: KeyRetrieverConfig contains configuration for a key
+                      retriever to fetch the encryption key.
                     type: object
-                  retrieverType:
-                    description: KeyRetriever is the source where the encryption key
+                  keyRetrieverType:
+                    description: KeyRetrieverType is the source the encryption key
                       is read from.
                     type: string
                 type: object

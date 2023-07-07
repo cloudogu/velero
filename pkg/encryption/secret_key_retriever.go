@@ -23,7 +23,7 @@ type secretKeyRetriever struct {
 	namespace  string
 }
 
-func newSecretKeyRetriever(client crlClient.Client, keyLocation velerov1.EncryptionKeyLocation) (*secretKeyRetriever, error) {
+func newSecretKeyRetriever(client crlClient.Client, keyLocation velerov1.EncryptionKeyRetrieverConfig) (*secretKeyRetriever, error) {
 	secretName := keyLocation[locationSecretNameKey]
 	if secretName == "" {
 		return nil, fmt.Errorf("secret name cannot be empty")
@@ -37,14 +37,18 @@ func newSecretKeyRetriever(client crlClient.Client, keyLocation velerov1.Encrypt
 	return &secretKeyRetriever{client: client, secretName: secretName, namespace: namespace}, nil
 }
 
+// RetrieverType designates the source this KeyRetriever fetches the encryption key from.
+// In this case, a secret.
 func (s *secretKeyRetriever) RetrieverType() velerov1.EncryptionKeyRetrieverType {
 	return SecretKeyRetrieverType
 }
 
-func (s *secretKeyRetriever) KeyLocation() velerov1.EncryptionKeyLocation {
-	return SecretKeyLocation(s.secretName, s.namespace)
+// Config contains configuration another KeyRetriever of the same type might use to fetch the encryption key.
+func (s *secretKeyRetriever) Config() velerov1.EncryptionKeyRetrieverConfig {
+	return SecretKeyConfig(s.secretName, s.namespace)
 }
 
+// GetKey fetches an encryption key from a Kubernetes secret.
 func (s *secretKeyRetriever) GetKey() (string, error) {
 	secret := corev1.Secret{}
 	err := s.client.Get(context.Background(), crlClient.ObjectKey{Name: s.secretName, Namespace: s.namespace}, &secret)
@@ -60,8 +64,9 @@ func (s *secretKeyRetriever) GetKey() (string, error) {
 	return string(key), nil
 }
 
-func SecretKeyLocation(secretName, namespace string) velerov1.EncryptionKeyLocation {
-	return velerov1.EncryptionKeyLocation{
+// SecretKeyConfig creates the retriever config for a key retriever that fetches the encryption key from a secret.
+func SecretKeyConfig(secretName, namespace string) velerov1.EncryptionKeyRetrieverConfig {
+	return velerov1.EncryptionKeyRetrieverConfig{
 		locationSecretNameKey: secretName,
 		locationNamespaceKey:  namespace,
 	}

@@ -399,7 +399,11 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 	var backupContent io.Reader
 	var err error
 	if ctx.backup.Status.Encryption.IsEncrypted {
-		encryptionKeyRetriever, err := encryption.KeyRetrieverFor(ctx.backup.Status.Encryption.KeyRetriever, ctx.backup.Status.Encryption.KeyLocation, ctx.kbClient)
+		encryptionKeyRetriever, err := encryption.KeyRetrieverFor(
+			ctx.backup.Status.Encryption.KeyRetrieverType,
+			ctx.backup.Status.Encryption.KeyRetrieverConfig,
+			ctx.kbClient,
+		)
 		if err != nil {
 			ctx.log.Errorf("error creating encryption key retriever: %s", err.Error())
 			errs.AddVeleroError(err)

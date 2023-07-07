@@ -4355,9 +4355,9 @@ func TestBackupEncryption(t *testing.T) {
 				"resources/deployments.apps/v1-preferredversion/namespaces/ns-1/deploy-1.json",
 			},
 			wantEncryptionStatus: velerov1.EncryptionStatus{
-				IsEncrypted:  true,
-				KeyRetriever: "secret",
-				KeyLocation:  velerov1.EncryptionKeyLocation{"namespace": "velero", "secretName": "encryption-key"},
+				IsEncrypted:        true,
+				KeyRetrieverType:   "secret",
+				KeyRetrieverConfig: velerov1.EncryptionKeyRetrieverConfig{"namespace": "velero", "secretName": "encryption-key"},
 			},
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
