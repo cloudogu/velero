@@ -63,8 +63,8 @@ The `encryptor` interface has been introduced to provide abstraction over the us
 The default (and for now only) encryptor implementation is the `aesEncryptor`:
 ```go
 type encryptor interface {
-	encrypt(plaintext []byte) ([]byte, error)
-	decrypt(ciphertext []byte) ([]byte, error)
+	Encrypt(plaintext []byte) ([]byte, error)
+	Decrypt(ciphertext []byte) ([]byte, error)
 }
 
 type aesEncryptor struct {
@@ -72,7 +72,7 @@ type aesEncryptor struct {
 	key []byte
 }
 
-func (aes *aesEncryptor) encrypt(plaintext []byte) ([]byte, error) {
+func (aes *aesEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	nonce := make([]byte, aes.gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, fmt.Errorf("failed to create nonce for encryption: %w", err)
@@ -82,7 +82,7 @@ func (aes *aesEncryptor) encrypt(plaintext []byte) ([]byte, error) {
 	return cipherBytes, nil
 }
 
-func (aes *aesEncryptor) decrypt(ciphertext []byte) ([]byte, error) {
+func (aes *aesEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
     nonceSize := aes.gcm.NonceSize()
     if len(ciphertext) <= nonceSize {
         return nil, fmt.Errorf("failed to decrypt: ciphertext (length %d) too short", len(ciphertext))
@@ -157,7 +157,7 @@ func (ew *encryptionWriter) Close() error {
 		return nil
 	}
 
-	ciphertext, err := ew.encryptor.encrypt(ew.plaintext)
+	ciphertext, err := ew.encryptor.Encrypt(ew.plaintext)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -190,7 +190,7 @@ func NewDecryptionReader(in io.Reader, encryptionKey string) (io.Reader, error) 
 	}
 
 	ciphertext := buf.Bytes()
-	plaintext, err := encryptor.decrypt(ciphertext)
+	plaintext, err := encryptor.Decrypt(ciphertext)
 	if err != nil {
 		return nil, err
 	}
