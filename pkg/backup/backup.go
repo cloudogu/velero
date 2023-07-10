@@ -191,11 +191,7 @@ func (kb *kubernetesBackupper) Backup(log logrus.FieldLogger, backupRequest *Req
 	return kb.BackupWithResolvers(log, backupRequest, backupFile, backupItemActions, volumeSnapshotterGetter)
 }
 
-func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
-	backupRequest *Request,
-	backupFile io.Writer,
-	backupItemActionResolver framework.BackupItemActionResolverV2,
-	volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
+func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger, backupRequest *Request, backupFile io.Writer, backupItemActionResolver framework.BackupItemActionResolverV2, volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
 
 	var backupContent io.Writer
 	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
