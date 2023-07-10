@@ -56,7 +56,7 @@ func (ew *encryptionWriter) Close() error {
 		return nil
 	}
 
-	ciphertext, err := ew.encryptor.encrypt(ew.plaintext)
+	ciphertext, err := ew.encryptor.Encrypt(ew.plaintext)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}

@@ -49,6 +49,6 @@ func KeyRetrieverFor(retrieverType velerov1.EncryptionKeyRetrieverType, keyLocat
 	case SecretKeyRetrieverType:
 		return newSecretKeyRetriever(client, keyLocation)
 	default:
-		return nil, fmt.Errorf("could not find encryption key retriever for type '%s'", retrieverType)
+		return nil, fmt.Errorf("encryption key retriever for type '%s' does not exist", retrieverType)
 	}
 }

@@ -36,7 +36,7 @@ func NewDecryptionReader(in io.Reader, encryptionKey string) (io.Reader, error) 
 	}
 
 	ciphertext := buf.Bytes()
-	plaintext, err := encryptor.decrypt(ciphertext)
+	plaintext, err := encryptor.Decrypt(ciphertext)
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func Test_aesEncryptor_encrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		got, err := aes.encrypt([]byte("plaintext"))
+		got, err := aes.Encrypt([]byte("plaintext"))
 
 		// then
 		require.Error(t, err)
@@ -74,12 +74,12 @@ func Test_aesEncryptor_encrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		got, err := aes.encrypt([]byte("plaintext"))
+		got, err := aes.Encrypt([]byte("plaintext"))
 
 		// then
 		require.NoError(t, err)
 		assert.NotEmpty(t, got)
-		decrypted, err := aes.decrypt(got)
+		decrypted, err := aes.Decrypt(got)
 		assert.Equal(t, "plaintext", string(decrypted))
 	})
 }
@@ -126,9 +126,9 @@ func Test_aesEncryptor_decrypt(t *testing.T) {
 			aes, err := newAesEncryptor("abcdefghijklmnopqrstuvwx")
 			require.NoError(t, err)
 
-			got, err := aes.decrypt(tt.ciphertext)
+			got, err := aes.Decrypt(tt.ciphertext)
 			tt.wantErr(t, err)
-			assert.Equalf(t, string(tt.want), string(got), "decrypt(%v)", tt.ciphertext)
+			assert.Equalf(t, string(tt.want), string(got), "Decrypt(%v)", tt.ciphertext)
 		})
 	}
 }
