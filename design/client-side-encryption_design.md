@@ -206,7 +206,7 @@ To discern if and how a given backup is encrypted, the `BackupStatus` gets exten
 // BackupStatus captures the current status of a Velero backup.
 type BackupStatus struct {
     ...
-    
+
     // Encryption contains metadata about and whether encryption was used.
     // +optional
     Encryption EncryptionStatus `json:"encryption,omitempty"`
@@ -259,7 +259,7 @@ func KeyRetrieverFor(retrieverType velerov1.EncryptionKeyRetrieverType, keyLocat
             err = fmt.Errorf("could not create encryption key retriever for type '%s': %w", retrieverType, err)
         }
     }()
-    
+
     switch retrieverType {
     case SecretKeyRetrieverType:
         return newSecretKeyRetriever(client, keyLocation)
@@ -317,12 +317,12 @@ func (s *secretKeyRetriever) GetKey() (string, error) {
     if err != nil {
         return "", fmt.Errorf("failed to get encryption key secret '%s': %w", s.secretName, err)
     }
-    
+
     key, ok := secret.Data[encryptionKeySecretField]
     if !ok {
         return "", fmt.Errorf("encryption key secret '%s' lacks field '%s'", s.secretName, encryptionKeySecretField)
     }
-    
+
     return string(key), nil
 }
 
@@ -340,17 +340,17 @@ func SecretKeyConfig(secretName, namespace string) velerov1.EncryptionKeyRetriev
 The `kubernetesBackupper` gets extended by a namespace and the encryption secret:
 ```go
 type kubernetesBackupper struct {
-	...
-	veleroNamespace        string
-	encryptionSecret string
+    ...
+	veleroNamespace  string
+    encryptionSecret string
 }
 
 func NewKubernetesBackupper(
-	...
-    veleroNamespace string,
+    ...
+    veleroNamespace  string,
     encryptionSecret string,
 ) (Backupper, error) {
-	...
+    ...
 }
 ```
 
@@ -368,7 +368,7 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
     var backupContent io.Writer
     if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
         encryptionKeyRetriever, err := encryption.KeyRetrieverFor(
-			encryption.SecretKeyRetrieverType,
+            encryption.SecretKeyRetrieverType,
             encryption.SecretKeyConfig(kb.encryptionSecret, kb.veleroNamespace),
             kb.kbClient,
         )
@@ -404,9 +404,9 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
     } else {
         backupContent = backupFile
     }
-    
+
     gzippedData := gzip.NewWriter(backupContent)
-	...
+    ...
 }
 ```
 
@@ -415,15 +415,15 @@ func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
 The `kubernetesRestorer` gets extended by a namespace:
 ```go
 type kubernetesRestorer struct {
-	...
-	veleroNamespace string
+    ...
+    veleroNamespace string
 }
 
 func NewKubernetesRestorer(
     ...
     veleroNamespace string,
 ) (Restorer, error) {
-	...
+    ...
 }
 ```
 
@@ -433,8 +433,8 @@ It is necessary to find the encryption secret.
 The namespace also needs to be passed to `restoreContext`:
 ```go
 type restoreContext struct {
-	...
-	veleroNamespace string
+    ...
+    veleroNamespace string
 }
 ```
 
@@ -442,9 +442,9 @@ Decryption then happens in the `execute` method of the `restoreContext`:
 ```go
 func (ctx *restoreContext) execute() (results.Result, results.Result) {
     warnings, errs := results.Result{}, results.Result{}
-    
+
     ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
-    
+
     var backupContent io.Reader
     var err error
     if ctx.backup.Status.Encryption.IsEncrypted {
@@ -458,27 +458,27 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
         errs.AddVeleroError(err)
         return warnings, errs
     }
-    
+
     encryptionKey, err := encryptionKeyRetriever.GetKey()
     if err != nil {
         ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
         errs.AddVeleroError(err)
         return warnings, errs
     }
-    
+
     backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, encryptionKey)
     if err != nil {
         ctx.log.Errorf("error decrypting backup: %s", err.Error())
         errs.AddVeleroError(err)
         return warnings, errs
     }
-    
+
     } else {
         backupContent = ctx.backupReader
     }
-    
+
     dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(backupContent)
-	...
+    ...
 }
 ```
 
