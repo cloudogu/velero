@@ -4295,7 +4295,7 @@ func TestBackupEncryption(t *testing.T) {
 			wantErr: func(t *testing.T, err error) {
 				t.Helper()
 				require.Error(t, err)
-				assert.ErrorContains(t, err, "could not create encryption key receiver for type 'secret': secret name cannot be empty")
+				assert.ErrorContains(t, err, "could not create encryption key retriever for type 'secret': secret name cannot be empty")
 			},
 		},
 		{

@@ -699,7 +699,7 @@ func TestRestoreEncrypted(t *testing.T) {
 				t.Helper()
 				require.Len(t, res, 2)
 				assert.Empty(t, res[0].Velero)
-				assert.Contains(t, res[1].Velero, "could not create encryption key receiver for type 'invalid': could not find encryption key receiver for type 'invalid'")
+				assert.Contains(t, res[1].Velero, "could not create encryption key retriever for type 'invalid': encryption key retriever for type 'invalid' does not exist")
 			},
 		},
 		{
