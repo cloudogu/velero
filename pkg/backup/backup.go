@@ -1,5 +1,5 @@
 /*
-Copyright the Velero Contributors.
+Copyright 2023 the Velero Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ import (
 	kbclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/vmware-tanzu/velero/pkg/discovery"
+	"github.com/vmware-tanzu/velero/pkg/encryption"
+	"github.com/vmware-tanzu/velero/pkg/features"
 	"github.com/vmware-tanzu/velero/pkg/itemoperation"
 	"github.com/vmware-tanzu/velero/pkg/kuberesource"
 	"github.com/vmware-tanzu/velero/pkg/plugin/framework"
@@ -76,6 +78,7 @@ type Backupper interface {
 // kubernetesBackupper implements Backupper.
 type kubernetesBackupper struct {
 	kbClient                  kbclient.Client
+	veleroNamespace           string
 	dynamicFactory            client.DynamicFactory
 	discoveryHelper           discovery.Helper
 	podCommandExecutor        podexec.PodCommandExecutor
@@ -84,6 +87,7 @@ type kubernetesBackupper struct {
 	defaultVolumesToFsBackup  bool
 	clientPageSize            int
 	uploaderType              string
+	encryptionSecret          string
 }
 
 func (i *itemKey) String() string {
@@ -103,6 +107,7 @@ func cohabitatingResources() map[string]*cohabitatingResource {
 // NewKubernetesBackupper creates a new kubernetesBackupper.
 func NewKubernetesBackupper(
 	kbClient kbclient.Client,
+	veleroNamespace string,
 	discoveryHelper discovery.Helper,
 	dynamicFactory client.DynamicFactory,
 	podCommandExecutor podexec.PodCommandExecutor,
@@ -111,9 +116,11 @@ func NewKubernetesBackupper(
 	defaultVolumesToFsBackup bool,
 	clientPageSize int,
 	uploaderType string,
+	encryptionSecret string,
 ) (Backupper, error) {
 	return &kubernetesBackupper{
 		kbClient:                  kbClient,
+		veleroNamespace:           veleroNamespace,
 		discoveryHelper:           discoveryHelper,
 		dynamicFactory:            dynamicFactory,
 		podCommandExecutor:        podCommandExecutor,
@@ -122,6 +129,7 @@ func NewKubernetesBackupper(
 		defaultVolumesToFsBackup:  defaultVolumesToFsBackup,
 		clientPageSize:            clientPageSize,
 		uploaderType:              uploaderType,
+		encryptionSecret:          encryptionSecret,
 	}, nil
 }
 
@@ -183,12 +191,48 @@ func (kb *kubernetesBackupper) Backup(log logrus.FieldLogger, backupRequest *Req
 	return kb.BackupWithResolvers(log, backupRequest, backupFile, backupItemActions, volumeSnapshotterGetter)
 }
 
-func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger,
-	backupRequest *Request,
-	backupFile io.Writer,
-	backupItemActionResolver framework.BackupItemActionResolverV2,
-	volumeSnapshotterGetter VolumeSnapshotterGetter) error {
-	gzippedData := gzip.NewWriter(backupFile)
+func (kb *kubernetesBackupper) BackupWithResolvers(log logrus.FieldLogger, backupRequest *Request, backupFile io.Writer, backupItemActionResolver framework.BackupItemActionResolverV2, volumeSnapshotterGetter VolumeSnapshotterGetter) (backupErr error) {
+	var backupContent io.Writer
+	if features.IsEnabled(velerov1api.EncryptionFeatureFlag) {
+		encryptionKeyRetriever, err := encryption.KeyRetrieverFor(
+			encryption.SecretKeyRetrieverType,
+			encryption.SecretKeyConfig(kb.encryptionSecret, kb.veleroNamespace),
+			kb.kbClient,
+		)
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from KeyRetrieverFor")
+			return err
+		}
+
+		encryptionKey, err := encryptionKeyRetriever.GetKey()
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from encryptionKeyRetriever.GetKey")
+			return err
+		}
+
+		encryptedContent, err := encryption.NewEncryptionWriter(backupFile, encryptionKey)
+		if err != nil {
+			log.WithError(errors.WithStack(err)).Debugf("Error from NewEncryptionWriter")
+			return err
+		}
+
+		backupContent = encryptedContent
+		backupRequest.Backup.Status.Encryption.IsEncrypted = true
+		backupRequest.Backup.Status.Encryption.KeyRetrieverType = encryptionKeyRetriever.RetrieverType()
+		backupRequest.Backup.Status.Encryption.KeyRetrieverConfig = encryptionKeyRetriever.Config()
+
+		defer func() {
+			err = encryptedContent.Close()
+			if err != nil {
+				log.WithError(errors.WithStack(err)).Debugf("Error from backupContent.Close")
+				backupErr = err
+			}
+		}()
+	} else {
+		backupContent = backupFile
+	}
+
+	gzippedData := gzip.NewWriter(backupContent)
 	defer gzippedData.Close()
 
 	tw := tar.NewWriter(gzippedData)

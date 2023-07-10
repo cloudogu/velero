@@ -1,5 +1,5 @@
 /*
-Copyright The Velero Contributors.
+Copyright 2023 The Velero Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -133,6 +133,7 @@ type serverConfig struct {
 	itemOperationSyncFrequency                                              time.Duration
 	defaultVolumesToFsBackup                                                bool
 	uploaderType                                                            string
+	encryptionSecret                                                        string
 	maxConcurrentK8SConnections                                             int
 }
 
@@ -229,6 +230,7 @@ func NewCommand(f client.Factory) *cobra.Command {
 	command.Flags().DurationVar(&config.itemOperationSyncFrequency, "item-operation-sync-frequency", config.itemOperationSyncFrequency, "How often to check status on backup/restore operations after backup/restore processing. Default is 10 seconds")
 	command.Flags().BoolVar(&config.defaultVolumesToFsBackup, "default-volumes-to-fs-backup", config.defaultVolumesToFsBackup, "Backup all volumes with pod volume file system backup by default.")
 	command.Flags().StringVar(&config.uploaderType, "uploader-type", config.uploaderType, "Type of uploader to handle the transfer of data of pod volumes")
+	command.Flags().StringVar(&config.encryptionSecret, "encryption-secret", config.encryptionSecret, "Name of the secret that contains the key to encrypt backups with. Used only if the 'EnableEncryption' feature flag is set.")
 	command.Flags().DurationVar(&config.defaultItemOperationTimeout, "default-item-operation-timeout", config.defaultItemOperationTimeout, "How long to wait on asynchronous BackupItemActions and RestoreItemActions to complete before timing out. Default is 4 hours")
 	command.Flags().DurationVar(&config.resourceTimeout, "resource-timeout", config.resourceTimeout, "How long to wait for resource processes which are not covered by other specific timeout parameters. Default is 10 minutes.")
 	command.Flags().IntVar(&config.maxConcurrentK8SConnections, "max-concurrent-k8s-connections", config.maxConcurrentK8SConnections, "Max concurrent connections number that Velero can create with kube-apiserver. Default is 30.")
@@ -727,6 +729,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 	if _, ok := enabledRuntimeControllers[controller.Backup]; ok {
 		backupper, err := backup.NewKubernetesBackupper(
 			s.mgr.GetClient(),
+			s.namespace,
 			s.discoveryHelper,
 			client.NewDynamicFactory(s.dynamicClient),
 			podexec.NewPodCommandExecutor(s.kubeClientConfig, s.kubeClient.CoreV1().RESTClient()),
@@ -743,6 +746,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 			s.config.defaultVolumesToFsBackup,
 			s.config.clientPageSize,
 			s.config.uploaderType,
+			s.config.encryptionSecret,
 		)
 		cmd.CheckError(err)
 		if err := controller.NewBackupReconciler(
@@ -808,6 +812,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 	if _, ok := enabledRuntimeControllers[controller.BackupFinalizer]; ok {
 		backupper, err := backup.NewKubernetesBackupper(
 			s.mgr.GetClient(),
+			s.namespace,
 			s.discoveryHelper,
 			client.NewDynamicFactory(s.dynamicClient),
 			podexec.NewPodCommandExecutor(s.kubeClientConfig, s.kubeClient.CoreV1().RESTClient()),
@@ -824,6 +829,7 @@ func (s *server) runControllers(defaultVolumeSnapshotLocations map[string]string
 			s.config.defaultVolumesToFsBackup,
 			s.config.clientPageSize,
 			s.config.uploaderType,
+			s.config.encryptionSecret,
 		)
 		cmd.CheckError(err)
 		r := controller.NewBackupFinalizerReconciler(

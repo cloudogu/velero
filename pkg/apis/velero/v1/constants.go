@@ -1,5 +1,5 @@
 /*
-Copyright 2017 the Velero contributors.
+Copyright 2023 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,6 +39,9 @@ const (
 
 	// CSIFeatureFlag is the feature flag string that defines whether or not CSI features are being used.
 	CSIFeatureFlag = "EnableCSI"
+
+	// EncryptionFeatureFlag is the feature flag string that defines whether or not client-side-encryption features are being used.
+	EncryptionFeatureFlag = "EnableEncryption"
 
 	// PreferredVersionDir is the suffix name of the directory containing the preferred version of the API group
 	// resource within a Velero backup.

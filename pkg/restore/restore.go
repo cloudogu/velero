@@ -1,5 +1,5 @@
 /*
-Copyright The Velero Contributors.
+Copyright 2023 The Velero Contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ import (
 	"github.com/vmware-tanzu/velero/pkg/archive"
 	"github.com/vmware-tanzu/velero/pkg/client"
 	"github.com/vmware-tanzu/velero/pkg/discovery"
+	"github.com/vmware-tanzu/velero/pkg/encryption"
 	"github.com/vmware-tanzu/velero/pkg/features"
 	"github.com/vmware-tanzu/velero/pkg/itemoperation"
 	"github.com/vmware-tanzu/velero/pkg/kuberesource"
@@ -395,7 +396,38 @@ func (ctx *restoreContext) execute() (results.Result, results.Result) {
 
 	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
 
-	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(ctx.backupReader)
+	var backupContent io.Reader
+	var err error
+	if ctx.backup.Status.Encryption.IsEncrypted {
+		encryptionKeyRetriever, err := encryption.KeyRetrieverFor(
+			ctx.backup.Status.Encryption.KeyRetrieverType,
+			ctx.backup.Status.Encryption.KeyRetrieverConfig,
+			ctx.kbClient,
+		)
+		if err != nil {
+			ctx.log.Errorf("error creating encryption key retriever: %s", err.Error())
+			errs.AddVeleroError(err)
+			return warnings, errs
+		}
+
+		encryptionKey, err := encryptionKeyRetriever.GetKey()
+		if err != nil {
+			ctx.log.Errorf("error getting encryption key from secret: %s", err.Error())
+			errs.AddVeleroError(err)
+			return warnings, errs
+		}
+
+		backupContent, err = encryption.NewDecryptionReader(ctx.backupReader, encryptionKey)
+		if err != nil {
+			ctx.log.Errorf("error decrypting backup: %s", err.Error())
+			errs.AddVeleroError(err)
+			return warnings, errs
+		}
+	} else {
+		backupContent = ctx.backupReader
+	}
+
+	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(backupContent)
 	if err != nil {
 		ctx.log.Infof("error unzipping and extracting: %v", err)
 		errs.AddVeleroError(err)

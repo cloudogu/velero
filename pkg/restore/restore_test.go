@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vmware-tanzu/velero/pkg/encryption"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -662,6 +664,124 @@ func TestRestoreNamespaceMapping(t *testing.T) {
 			)
 
 			assertEmptyResults(t, warnings, errs)
+			assertAPIContents(t, h, tc.want)
+		})
+	}
+}
+
+// TestRestoreEncrypted runs restores on encrypted backups
+// and verifies that the set of items created in the API are correct.
+func TestRestoreEncrypted(t *testing.T) {
+	var (
+		encryptionKey        = "abcdefghijklmnopqrstuvwxyz123456"
+		encryptionSecretName = "encryption-key"
+	)
+
+	tests := []struct {
+		name             string
+		restore          *velerov1api.Restore
+		backup           *velerov1api.Backup
+		keyReceiver      velerov1api.EncryptionKeyRetrieverType
+		encryptionSecret *corev1api.Secret
+		apiResources     []*test.APIResource
+		tarball          io.Reader
+		want             map[*test.APIResource][]string
+		wantResults      func(t *testing.T, res ...Result)
+	}{
+		{
+			name:             "fail to create key retriever",
+			restore:          defaultRestore().Result(),
+			backup:           defaultBackup().Result(),
+			keyReceiver:      "invalid",
+			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, encryptionSecretName).Result(),
+			want:             map[*test.APIResource][]string{},
+			wantResults: func(t *testing.T, res ...Result) {
+				t.Helper()
+				require.Len(t, res, 2)
+				assert.Empty(t, res[0].Velero)
+				assert.Contains(t, res[1].Velero, "could not create encryption key retriever for type 'invalid': encryption key retriever for type 'invalid' does not exist")
+			},
+		},
+		{
+			name:             "fail to get encryption key secret",
+			restore:          defaultRestore().Result(),
+			backup:           defaultBackup().Result(),
+			keyReceiver:      encryption.SecretKeyRetrieverType,
+			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			want:             map[*test.APIResource][]string{},
+			wantResults: func(t *testing.T, res ...Result) {
+				t.Helper()
+				require.Len(t, res, 2)
+				assert.Empty(t, res[0].Velero)
+				assert.Contains(t, res[1].Velero, "failed to get encryption key secret 'encryption-key': secrets \"encryption-key\" not found")
+			},
+		},
+		{
+			name:             "fail to create encryption reader",
+			restore:          defaultRestore().Result(),
+			backup:           defaultBackup().Result(),
+			keyReceiver:      encryption.SecretKeyRetrieverType,
+			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
+			want:             map[*test.APIResource][]string{},
+			wantResults: func(t *testing.T, res ...Result) {
+				t.Helper()
+				require.Len(t, res, 2)
+				assert.Empty(t, res[0].Velero)
+				assert.Contains(t, res[1].Velero, "failed to create AES encryptor: failed to create AES cipher: crypto/aes: invalid key size 13")
+			},
+		},
+		{
+			name:             "backup gets decrypted successfully",
+			restore:          defaultRestore().Result(),
+			backup:           defaultBackup().Result(),
+			keyReceiver:      encryption.SecretKeyRetrieverType,
+			encryptionSecret: builder.ForSecret(velerov1api.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			apiResources: []*test.APIResource{
+				test.Pods(),
+			},
+			tarball: test.NewEncryptionWriter(t, encryptionKey).
+				AddItems("pods",
+					builder.ForPod("ns-1", "pod-1").Result(),
+					builder.ForPod("ns-2", "pod-2").Result(),
+					builder.ForPod("ns-3", "pod-3").Result(),
+				).
+				Done(),
+			want: map[*test.APIResource][]string{
+				test.Pods(): {"ns-1/pod-1", "ns-2/pod-2", "ns-3/pod-3"},
+			},
+			wantResults: assertEmptyResults,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+
+			tc.backup.Status.Encryption.IsEncrypted = true
+			tc.backup.Status.Encryption.KeyRetrieverType = tc.keyReceiver
+			tc.backup.Status.Encryption.KeyRetrieverConfig = encryption.SecretKeyConfig(encryptionSecretName, velerov1api.DefaultNamespace)
+			require.NoError(t, h.restorer.kbClient.Create(context.Background(), tc.encryptionSecret))
+
+			for _, r := range tc.apiResources {
+				h.DiscoveryClient.WithAPIResource(r)
+			}
+			require.NoError(t, h.restorer.discoveryHelper.Refresh())
+
+			data := &Request{
+				Log:              h.log,
+				Restore:          tc.restore,
+				Backup:           tc.backup,
+				PodVolumeBackups: nil,
+				VolumeSnapshots:  nil,
+				BackupReader:     tc.tarball,
+			}
+			warnings, errs := h.restorer.Restore(
+				data,
+				nil, // restoreItemActions
+				nil, // volume snapshotter getter
+			)
+
+			tc.wantResults(t, warnings, errs)
 			assertAPIContents(t, h, tc.want)
 		})
 	}

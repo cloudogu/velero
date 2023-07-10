@@ -29,6 +29,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vmware-tanzu/velero/pkg/encryption"
+	"github.com/vmware-tanzu/velero/pkg/features"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -3165,6 +3168,17 @@ func assertTarballContents(t *testing.T, backupFile io.Reader, items ...string) 
 	assert.Equal(t, items, files)
 }
 
+// assertEncryptedTarballContents decrypts the backup file and verifies that the contained
+// gzipped tarball contains exactly the file names specified.
+func assertEncryptedTarballContents(t *testing.T, backupFile io.Reader, encryptionKey string, items ...string) {
+	t.Helper()
+
+	dr, err := encryption.NewDecryptionReader(backupFile, encryptionKey)
+	require.NoError(t, err)
+
+	assertTarballContents(t, dr, items...)
+}
+
 // unstructuredObject is a type alias to improve readability.
 type unstructuredObject map[string]interface{}
 
@@ -4242,6 +4256,143 @@ func TestBackupNamespaces(t *testing.T) {
 			h.backupper.Backup(h.log, req, backupFile, nil, nil)
 
 			assertTarballContents(t, backupFile, append(tc.want, "metadata/version")...)
+		})
+	}
+}
+
+type errReadWriter struct{}
+
+func (e *errReadWriter) Read([]byte) (int, error) {
+	return 0, assert.AnError
+}
+
+func (e *errReadWriter) Write([]byte) (int, error) {
+	return 0, assert.AnError
+}
+
+func TestBackupEncryption(t *testing.T) {
+	var (
+		encryptionKey        = "abcdefghijklmnopqrstuvwxyz123456"
+		encryptionSecretName = "encryption-key"
+	)
+
+	tests := []struct {
+		name                 string
+		backup               *velerov1.Backup
+		backupFile           io.ReadWriter
+		configuredSecretName string
+		encryptionSecret     *corev1.Secret
+		apiResources         []*test.APIResource
+		want                 []string
+		wantEncryptionStatus velerov1.EncryptionStatus
+		wantErr              func(t *testing.T, err error)
+	}{
+		{
+			name:                 "Should fail to create encryption key retriever",
+			backup:               defaultBackup().Result(),
+			configuredSecretName: "",
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Result(),
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "could not create encryption key retriever for type 'secret': secret name cannot be empty")
+			},
+		},
+		{
+			name:                 "Should fail to get encryption key secret",
+			backup:               defaultBackup().Result(),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, "incorrect-encryption-key").Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "failed to get encryption key secret 'encryption-key': secrets \"encryption-key\" not found")
+			},
+		},
+		{
+			name:                 "Should fail to create encryption writer",
+			backup:               defaultBackup().Result(),
+			backupFile:           bytes.NewBuffer([]byte{}),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte("invalidAESkey")}).Result(),
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "failed to create AES encryptor: failed to create AES cipher")
+			},
+		},
+		{
+			name:                 "Should fail to close encryption writer",
+			backup:               defaultBackup().Result(),
+			backupFile:           &errReadWriter{},
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.ErrorIs(t, err, assert.AnError)
+				assert.ErrorContains(t, err, "failed to write cipher text to output writer")
+			},
+		},
+		{
+			name:                 "Should encrypt backup successfully",
+			backup:               defaultBackup().Result(),
+			backupFile:           bytes.NewBuffer([]byte{}),
+			configuredSecretName: encryptionSecretName,
+			encryptionSecret:     builder.ForSecret(velerov1.DefaultNamespace, encryptionSecretName).Data(map[string][]byte{"encryptionKey": []byte(encryptionKey)}).Result(),
+			apiResources: []*test.APIResource{
+				test.Namespaces(
+					builder.ForNamespace("ns-1").Result(),
+				),
+				test.Deployments(
+					builder.ForDeployment("ns-1", "deploy-1").ObjectMeta(builder.WithLabels("a", "b")).Result(),
+				),
+			},
+			want: []string{
+				"resources/namespaces/cluster/ns-1.json",
+				"resources/namespaces/v1-preferredversion/cluster/ns-1.json",
+				"resources/deployments.apps/namespaces/ns-1/deploy-1.json",
+				"resources/deployments.apps/v1-preferredversion/namespaces/ns-1/deploy-1.json",
+			},
+			wantEncryptionStatus: velerov1.EncryptionStatus{
+				IsEncrypted:        true,
+				KeyRetrieverType:   "secret",
+				KeyRetrieverConfig: velerov1.EncryptionKeyRetrieverConfig{"namespace": "velero", "secretName": "encryption-key"},
+			},
+			wantErr: func(t *testing.T, err error) {
+				t.Helper()
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				h                = newHarness(t)
+				req              = &Request{Backup: tc.backup}
+				originalFeatures = features.All()
+			)
+
+			features.Enable(velerov1.EncryptionFeatureFlag)
+			defer features.NewFeatureFlagSet(originalFeatures...)
+
+			h.backupper.veleroNamespace = velerov1.DefaultNamespace
+			h.backupper.encryptionSecret = tc.configuredSecretName
+			err := h.backupper.kbClient.Create(context.Background(), tc.encryptionSecret)
+			require.NoError(t, err)
+
+			for _, resource := range tc.apiResources {
+				h.addItems(t, resource)
+			}
+
+			err = h.backupper.Backup(h.log, req, tc.backupFile, nil, nil)
+
+			tc.wantErr(t, err)
+			if err == nil {
+				assert.Equal(t, tc.wantEncryptionStatus, req.Status.Encryption)
+				assertEncryptedTarballContents(t, tc.backupFile, encryptionKey, append(tc.want, "metadata/version")...)
+			}
 		})
 	}
 }

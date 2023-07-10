@@ -1,5 +1,5 @@
 /*
-Copyright 2020 the Velero contributors.
+Copyright 2023 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -434,6 +434,10 @@ type BackupStatus struct {
 	// BackupItemAction operations for this backup which ended with an error.
 	// +optional
 	BackupItemOperationsFailed int `json:"backupItemOperationsFailed,omitempty"`
+
+	// Encryption contains metadata about and whether encryption was used.
+	// +optional
+	Encryption EncryptionStatus `json:"encryption,omitempty"`
 }
 
 // BackupProgress stores information about the progress of a Backup's execution.
@@ -484,4 +488,25 @@ type BackupList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Backup `json:"items"`
+}
+
+// EncryptionKeyRetrieverType is used to decide which encryption.KeyRetriever implementation
+// should be used to read the encryption key.
+type EncryptionKeyRetrieverType string
+
+// EncryptionKeyRetrieverConfig contains configuration values for the encryption.KeyRetriever implementation
+// to discern where to read the encryption key.
+type EncryptionKeyRetrieverConfig map[string]string
+
+// EncryptionStatus contains information about the encryption of a backup.
+type EncryptionStatus struct {
+	// IsEncrypted indicates whether this backup is encrypted.
+	// +optional
+	IsEncrypted bool `json:"isEncrypted,omitempty"`
+	// KeyRetrieverType is the source the encryption key is read from.
+	// +optional
+	KeyRetrieverType EncryptionKeyRetrieverType `json:"keyRetrieverType,omitempty"`
+	// KeyRetrieverConfig contains configuration for a key retriever to fetch the encryption key.
+	// +optional
+	KeyRetrieverConfig EncryptionKeyRetrieverConfig `json:"keyRetrieverConfig,omitempty"`
 }
